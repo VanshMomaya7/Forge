@@ -1,5 +1,13 @@
 export type { AgentConfig, ForkAndRun, Promote, RunAgent } from '@forge/shared/contracts';
 export type {
+  BuildStrategy,
+  ComponentCandidate,
+  ComponentGraph,
+  ComponentSpec,
+  InterfaceContract,
+  OrchestrationMode
+} from '@forge/shared/component';
+export type {
   ScoreResult,
   Step,
   Task,
@@ -22,6 +30,11 @@ export {
   spawnCodexAppServer
 } from './codex-app-server.js';
 export type { CodexAppServerTransport } from './codex-app-server.js';
+export { buildComponents } from './build-components.js';
+export { integrationGate, integrate, selectBest } from './compose-back-half.js';
+export { decompose } from './decompose.js';
 export { forkAndRun, promote } from './orchestrator.js';
+export { runTask } from './router.js';
+export type { RunTaskOptions } from './router.js';
 export { runAgent } from './run-agent.js';
 export { get, list, upsert } from './store.js';
