@@ -15,7 +15,7 @@ const evalsPackage = '@forge/evals';
 
 type Gate = (score: ScoreResult | undefined) => Verdict;
 type EvalsModule = {
-  gate?: Gate;
+  gate?: (score: ScoreResult) => Verdict;
 };
 
 let cachedGate: Gate | undefined;
@@ -135,7 +135,8 @@ async function resolveGate(): Promise<Gate> {
 
   try {
     const evals = (await import(evalsPackage)) as EvalsModule;
-    cachedGate = typeof evals.gate === 'function' ? evals.gate : fallbackGate;
+    cachedGate =
+      typeof evals.gate === 'function' ? (score) => (score ? evals.gate!(score) : 'pass') : fallbackGate;
   } catch {
     cachedGate = fallbackGate;
   }
