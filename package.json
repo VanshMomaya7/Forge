@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc -b",
     "dev": "tsx packages/core/src/dev.ts",
+    "demo": "tsx packages/core/src/dev.ts",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"
   },
