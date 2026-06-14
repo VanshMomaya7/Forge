@@ -13,6 +13,17 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly'
+      }
+    }
+  },
+  {
     files: ['**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off'

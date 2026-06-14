@@ -98,6 +98,7 @@ app.post("/api/watch", (request, response) => {
 });
 
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  void _next;
   const message = error instanceof Error ? error.message : "unexpected error";
   response.status(500).json({ error: message });
 });
