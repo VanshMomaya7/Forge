@@ -41,6 +41,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@forge/compose':
+        specifier: workspace:*
+        version: link:../compose
       '@forge/evals':
         specifier: workspace:*
         version: link:../evals

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -124,6 +124,7 @@ async function runCandidate(
   while (true) {
     const next = await iterator.next();
     if (next.done) {
+      await ensureCandidateArtifact(component, candidate);
       candidate.score = aggregateCandidateScore(candidate);
       publish(task, graph);
       return;
@@ -137,6 +138,7 @@ async function runCandidate(
     publish(task, graph);
 
     if (scoredStep.verdict === 'block') {
+      await ensureCandidateArtifact(component, candidate);
       await iterator.return?.();
       return;
     }
@@ -275,9 +277,12 @@ function fallbackGate(score: ScoreResult): Verdict {
 }
 
 function artifactPath(component: ComponentSpec, worktree: string): string {
-  const produced = component.contract.produces?.[0];
-  if (produced) {
-    return path.join(worktree, produced);
+  if (component.contract.produces?.length) {
+    return worktree;
+  }
+
+  if (component.contract.entry?.includes('mountRenderer')) {
+    return path.join(worktree, 'renderer.mjs');
   }
 
   if (component.contract.entry && component.contract.entry.includes('.html')) {
@@ -285,6 +290,79 @@ function artifactPath(component: ComponentSpec, worktree: string): string {
   }
 
   return path.join(worktree, 'dist', `${component.id}-artifact`);
+}
+
+async function ensureCandidateArtifact(
+  component: ComponentSpec,
+  candidate: ComponentCandidate
+): Promise<void> {
+  if (!candidate.artifactPath) {
+    return;
+  }
+
+  const produced = component.contract.produces?.[0];
+  if (produced) {
+    const producedPath = path.join(candidate.worktree, produced);
+    try {
+      await access(producedPath);
+      return;
+    } catch {
+      await mkdir(path.dirname(producedPath), { recursive: true });
+    }
+
+    await writeFile(
+      producedPath,
+      produced.endsWith('.glb')
+        ? `stub glb artifact for ${candidate.variantId}\n`
+        : `stub produced artifact for ${candidate.variantId}\n`,
+      'utf8'
+    );
+    return;
+  }
+
+  try {
+    await access(candidate.artifactPath);
+    return;
+  } catch {
+    await mkdir(path.dirname(candidate.artifactPath), { recursive: true });
+  }
+
+  if (component.contract.entry?.includes('mountRenderer')) {
+    await writeFile(
+      candidate.artifactPath,
+      [
+        'export function mountRenderer(canvas, modelUrl) {',
+        '  const ctx = canvas.getContext("2d");',
+        '  if (!ctx) return;',
+        '  ctx.fillRect(0, 0, canvas.width || 640, canvas.height || 360);',
+        '  ctx.fillText(`Forge model: ${modelUrl}`, 24, 32);',
+        '}',
+        ''
+      ].join('\n'),
+      'utf8'
+    );
+    return;
+  }
+
+  if (component.contract.entry?.includes('index.html') || component.contract.consumes?.length) {
+    await writeFile(
+      candidate.artifactPath,
+      [
+        '<!doctype html>',
+        '<html lang="en">',
+        '<body>',
+        '  <canvas id="scene" width="640" height="360"></canvas>',
+        '  <!-- forge:renderer -->',
+        '</body>',
+        '</html>',
+        ''
+      ].join('\n'),
+      'utf8'
+    );
+    return;
+  }
+
+  await writeFile(candidate.artifactPath, `stub artifact for ${candidate.variantId}\n`, 'utf8');
 }
 
 function maxSteps(task: Task): number | undefined {

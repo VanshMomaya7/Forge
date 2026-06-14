@@ -1,14 +1,14 @@
 import { execFile } from 'node:child_process';
-import { rm } from 'node:fs/promises';
+import { access, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import type { Task } from '@forge/shared/task';
+import { selectBest } from '@forge/compose';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildComponents } from '../src/build-components.js';
-import { selectBest } from '../src/compose-back-half.js';
 import { decompose } from '../src/decompose.js';
 import { runTask } from '../src/router.js';
 
@@ -66,8 +66,9 @@ describe('compose stubs', () => {
     expect(new Set(graph.candidates.map((candidate) => candidate.worktree))).toHaveLength(4);
     expect(graph.candidates.every((candidate) => candidate.steps.length === 1)).toBe(true);
     expect(graph.candidates.every((candidate) => candidate.score?.overall)).toBe(true);
-    expect(graph.candidates.find((candidate) => candidate.variantId === 'model:blender')?.artifactPath)
-      .toContain(path.join('dist', 'model.glb'));
+    const model = graph.candidates.find((candidate) => candidate.variantId === 'model:blender');
+    expect(model?.artifactPath).toBe(model?.worktree);
+    await expect(access(path.join(model!.worktree, 'dist', 'model.glb'))).resolves.toBeUndefined();
   });
 
   it('selects the highest scored candidate per component', async () => {
@@ -114,6 +115,7 @@ function makeTask(): Task {
     context: {
       repo: repoRoot,
       worktreeRoot,
+      integrationRoot: path.join(worktreeRoot, 'integration'),
       maxSteps: 1
     },
     mode: 'compose',

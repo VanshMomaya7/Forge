@@ -1,7 +1,7 @@
 import type { Task } from '@forge/shared/task';
+import { integrate, integrationGate, selectBest } from '@forge/compose';
 
 import { buildComponents } from './build-components.js';
-import { integrate, integrationGate, selectBest } from './compose-back-half.js';
 import { decompose } from './decompose.js';
 import { emitTaskUpdated } from './event-bus.js';
 import { forkAndRun } from './orchestrator.js';

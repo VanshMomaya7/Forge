@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@forge/compose": "workspace:*",
     "@forge/evals": "workspace:*",
     "@forge/shared": "workspace:*",
     "@openai/codex": "^0.139.0",

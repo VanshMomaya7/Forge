@@ -31,7 +31,7 @@ export {
 } from './codex-app-server.js';
 export type { CodexAppServerTransport } from './codex-app-server.js';
 export { buildComponents } from './build-components.js';
-export { integrationGate, integrate, selectBest } from './compose-back-half.js';
+export { integrationGate, integrate, selectBest } from '@forge/compose';
 export { decompose } from './decompose.js';
 export { forkAndRun, promote } from './orchestrator.js';
 export { runTask } from './router.js';
