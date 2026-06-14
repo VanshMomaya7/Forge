@@ -43,7 +43,7 @@ importers:
         version: 0.139.0
       openai:
         specifier: ^6.42.0
-        version: 6.42.0(ws@8.21.0)
+        version: 6.42.0(ws@8.21.0)(zod@4.4.3)
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -51,6 +51,24 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+
+  packages/evals:
+    dependencies:
+      '@forge/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      '@openai/codex':
+        specifier: ^0.139.0
+        version: 0.139.0
+      '@openai/codex-sdk':
+        specifier: 0.139.0
+        version: 0.139.0
+      openai:
+        specifier: ^6.42.0
+        version: 6.42.0(ws@8.21.0)(zod@4.4.3)
+      zod:
+        specifier: ^4.2.0
+        version: 4.4.3
 
   shared: {}
 
@@ -1162,6 +1180,9 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@emnapi/core@1.10.0':
@@ -1895,9 +1916,10 @@ snapshots:
 
   obug@2.1.3: {}
 
-  openai@6.42.0(ws@8.21.0):
+  openai@6.42.0(ws@8.21.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.21.0
+      zod: 4.4.3
 
   optionator@0.9.4:
     dependencies:
@@ -2086,3 +2108,5 @@ snapshots:
   ws@8.21.0: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@4.4.3: {}
