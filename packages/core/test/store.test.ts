@@ -12,6 +12,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     origin: 'human',
     intent: 'Add a task store',
     context: {},
+    mode: 'race',
     steps: [],
     verdict: 'running',
     createdAt: 1,

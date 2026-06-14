@@ -20,6 +20,7 @@ async function main(): Promise<void> {
       repo: repoRoot,
       worktreeRoot: path.join(repoRoot, 'forge-worktrees', taskId)
     },
+    mode: 'race',
     steps: [],
     verdict: 'running',
     createdAt: Date.now(),

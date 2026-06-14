@@ -81,6 +81,7 @@ function makeTask(id: string, worktreeRoot: string, score?: number): Task {
       repo: repoRoot,
       worktreeRoot
     },
+    mode: 'race',
     steps:
       score === undefined
         ? []

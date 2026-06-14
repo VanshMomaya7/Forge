@@ -60,6 +60,7 @@ function makeTask(id: string): Task {
     origin: 'human',
     intent: `Intent for ${id}`,
     context: {},
+    mode: 'race',
     steps: [],
     verdict: 'running',
     createdAt: 1,

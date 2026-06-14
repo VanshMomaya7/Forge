@@ -98,6 +98,7 @@ function makeTask(): Task {
     origin: 'human',
     intent: 'Implement a feature',
     context: { repo: 'forge' },
+    mode: 'race',
     steps: [],
     verdict: 'running',
     createdAt: 1,

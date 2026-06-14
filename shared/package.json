@@ -11,6 +11,10 @@
     "./contracts": {
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
+    },
+    "./component": {
+      "types": "./dist/component.d.ts",
+      "import": "./dist/component.js"
     }
   },
   "types": "./dist/task.d.ts",

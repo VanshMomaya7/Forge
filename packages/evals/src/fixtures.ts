@@ -31,6 +31,7 @@ function makeFixture(name: string, output: string): ReplayFixture {
       repo: 'Forge',
       intent: 'Add distributed rate-limiting to /api/login.'
     },
+    mode: 'race',
     plan: [
       'Use distributed state so parallel server instances share limits.',
       'Apply the limiter to /api/login.',

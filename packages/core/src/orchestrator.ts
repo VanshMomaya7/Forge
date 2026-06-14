@@ -169,6 +169,7 @@ function createChildTask(
       repo: repoRoot,
       worktree
     },
+    mode: task.mode,
     steps: [],
     verdict: 'running',
     createdAt: now,

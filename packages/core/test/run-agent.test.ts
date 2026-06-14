@@ -8,6 +8,7 @@ function makeTask(): Task {
     origin: 'human',
     intent: 'Add a runner stub',
     context: {},
+    mode: 'race',
     steps: [],
     verdict: 'running',
     createdAt: 1,
