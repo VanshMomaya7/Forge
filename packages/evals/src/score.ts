@@ -1,6 +1,6 @@
-import type { Rubric, Score } from '@forge/shared/contracts';
 import type { ScoreResult } from '@forge/shared/task';
 
+import type { Rubric, Score } from './contracts.js';
 import { BLOCK_OVERALL_THRESHOLD, MAX_NOTES_LENGTH } from './constants.js';
 import { clamp01, hashToRange, roundScore, weightedOverall } from './math.js';
 import { scoreWithModel } from './model-judge.js';

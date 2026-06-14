@@ -1,4 +1,4 @@
-import type { Gate } from '@forge/shared/contracts';
+import type { Gate } from './contracts.js';
 
 import {
   BLOCK_OVERALL_THRESHOLD,

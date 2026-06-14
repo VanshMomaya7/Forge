@@ -1,6 +1,6 @@
-import type { Rubric } from '@forge/shared/contracts';
 import type { ScoreResult, Step, Task } from '@forge/shared/task';
 
+import type { Rubric } from './contracts.js';
 import { BLOCK_OVERALL_THRESHOLD, JUDGE_TIMEOUT_MS, MAX_NOTES_LENGTH } from './constants.js';
 import { clamp01, roundScore, weightedOverall } from './math.js';
 import { RubricSchema, ScoreResultSchema } from './schemas.js';

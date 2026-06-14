@@ -1,4 +1,4 @@
-import type { GenerateRubric, Rubric } from '@forge/shared/contracts';
+import type { GenerateRubric, Rubric } from './contracts.js';
 
 import {
   DEFAULT_CRITERIA,

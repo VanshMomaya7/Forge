@@ -1,6 +1,6 @@
-import type { Rubric } from '@forge/shared/contracts';
 import type { ScoreResult, Step, Task, Verdict } from '@forge/shared/task';
 
+import type { Rubric } from './contracts.js';
 import { BLOCK_OVERALL_THRESHOLD } from './constants.js';
 import { gate } from './gate.js';
 import { generateRubric } from './rubric.js';
