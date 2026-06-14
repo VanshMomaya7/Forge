@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "shared/**/*.ts",
+    "packages/**/*.ts",
+    "eslint.config.mjs",
+    "vitest.config.ts"
+  ]
+}

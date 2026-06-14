@@ -1,0 +1,18 @@
+{
+  "name": "@forge/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./task": {
+      "types": "./dist/task.d.ts",
+      "import": "./dist/task.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    }
+  },
+  "types": "./dist/task.d.ts",
+  "files": ["dist"]
+}
