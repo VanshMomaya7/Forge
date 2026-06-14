@@ -38,6 +38,9 @@ importers:
       '@openai/codex':
         specifier: ^0.139.0
         version: 0.139.0
+      '@openai/codex-sdk':
+        specifier: 0.139.0
+        version: 0.139.0
       openai:
         specifier: ^6.42.0
         version: 6.42.0(ws@8.21.0)
@@ -284,6 +287,10 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@openai/codex-sdk@0.139.0':
+    resolution: {integrity: sha512-r4lDckaVx4mVZy1v/7ykEhkeWjVfM/4oGJfhG0AP4+zN3Sa+jcf5hdY4EHfJasofBcp0tIF/7JCKHpv534R+tw==}
+    engines: {node: '>=18'}
 
   '@openai/codex@0.139.0':
     resolution: {integrity: sha512-wr2fRE+fzW0CjEbfFsLh1ftarVEcw0CMLWS7QyA0nyOz5qacQPVq3cq2+/U7oEbwm1TOqoi0Fm1nxniB5FkpmA==}
@@ -1321,6 +1328,10 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.2
     optional: true
+
+  '@openai/codex-sdk@0.139.0':
+    dependencies:
+      '@openai/codex': 0.139.0
 
   '@openai/codex@0.139.0':
     optionalDependencies:
