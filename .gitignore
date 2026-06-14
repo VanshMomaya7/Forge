@@ -1,5 +1,9 @@
 node_modules/
 dist/
+!packages/compose/fixtures/artifacts/model-blender/dist/
+!packages/compose/fixtures/artifacts/model-blender/dist/model.glb
+!packages/compose/fixtures/artifacts/model-online/dist/
+!packages/compose/fixtures/artifacts/model-online/dist/model.glb
 coverage/
 .env
 .env.*
@@ -9,5 +13,6 @@ coverage/
 Thumbs.db
 forge-worktrees/
 forge-worktrees-test/
+packages/compose/.local-compose/
 .codex-generated-schemas/
 .codex-runtime/

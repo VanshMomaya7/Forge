@@ -12,6 +12,7 @@
     "build": "tsc -b",
     "dev": "tsx packages/core/src/dev.ts",
     "demo": "tsx packages/core/src/dev.ts",
+    "compose:replay": "pnpm --filter @forge/compose compose:replay",
     "evals:replay": "pnpm --filter @forge/evals evals:replay",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"

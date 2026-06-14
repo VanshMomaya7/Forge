@@ -1,0 +1,22 @@
+{
+  "name": "@forge/compose",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "compose:replay": "tsx src/replay.ts",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@forge/shared": "workspace:*",
+    "zod": "^4.2.0"
+  }
+}
