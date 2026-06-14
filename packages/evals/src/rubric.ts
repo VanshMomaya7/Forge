@@ -1,6 +1,7 @@
 import type { GenerateRubric, Rubric } from '@forge/shared/contracts';
 
 import { DEFAULT_CRITERIA, DEFAULT_RUBRIC_ID, DEFAULT_WEIGHTS } from './constants.js';
+import { generateRubricWithModel } from './model-judge.js';
 import { RubricSchema } from './schemas.js';
 
 const cache = new Map<string, Rubric>();
@@ -11,6 +12,12 @@ export const generateRubric: GenerateRubric = async (context) => {
 
   if (cached) {
     return cached;
+  }
+
+  const modelRubric = await generateRubricWithModel(context);
+  if (modelRubric) {
+    cache.set(cacheKey, modelRubric);
+    return modelRubric;
   }
 
   const repo = typeof context.repo === 'string' ? context.repo : 'repo';

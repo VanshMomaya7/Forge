@@ -9,5 +9,5 @@ export {
 } from './constants.js';
 export { gate } from './gate.js';
 export { generateRubric } from './rubric.js';
-export { JUDGE_MODEL, JUDGE_TEMPERATURE } from './model-judge.js';
+export { JUDGE_MODEL, JUDGE_TEMPERATURE, generateRubricWithModel, scoreWithModel } from './model-judge.js';
 export { score } from './score.js';
