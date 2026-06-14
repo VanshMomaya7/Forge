@@ -1,6 +1,8 @@
 import type { RunAgent } from '@forge/shared/contracts';
 import type { Step } from '@forge/shared/task';
 
+import { runRealCodexAgent } from './codex-app-server.js';
+
 const DEFAULT_STEP_COUNT = 3;
 const STEP_DELAY_MS = 500;
 const FALLBACK_AGENT_ID = 'agent-forge-core-stub';
@@ -46,6 +48,11 @@ function stepCount(maxSteps: number | undefined): number {
 }
 
 export const runAgent: RunAgent = async function* runAgent(task, cfg) {
+  if (useRealCodex()) {
+    yield* runRealCodexAgent(task, cfg);
+    return;
+  }
+
   const agentId = deriveAgentId(cfg.worktree);
   const totalSteps = stepCount(cfg.maxSteps);
 
@@ -66,3 +73,8 @@ export const runAgent: RunAgent = async function* runAgent(task, cfg) {
     yield step;
   }
 };
+
+function useRealCodex(): boolean {
+  const value = process.env.USE_REAL_CODEX;
+  return value === '1' || value === 'true' || value === 'yes';
+}

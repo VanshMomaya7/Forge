@@ -212,20 +212,32 @@ function removeWorktree(task: Task): void {
     return;
   }
 
-  execFileSync(
-    'git',
-    [
-      '-c',
-      `safe.directory=${safeDirectory(path.resolve(task.context.repo))}`,
-      '-C',
-      path.resolve(task.context.repo),
-      'worktree',
-      'remove',
-      '--force',
-      task.context.worktree
-    ],
-    { stdio: 'ignore' }
-  );
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      execFileSync(
+        'git',
+        [
+          '-c',
+          `safe.directory=${safeDirectory(path.resolve(task.context.repo))}`,
+          '-C',
+          path.resolve(task.context.repo),
+          'worktree',
+          'remove',
+          '--force',
+          task.context.worktree
+        ],
+        { stdio: 'ignore' }
+      );
+      return;
+    } catch (error) {
+      if (attempt === 2) {
+        task.context.worktreeRemovalError = error instanceof Error ? error.message : String(error);
+        return;
+      }
+
+      sleepSync(100);
+    }
+  }
 }
 
 function hasBlockedStep(task: Task): boolean {
@@ -250,4 +262,8 @@ function sanitizePathSegment(value: string): string {
 
 function safeDirectory(repoRoot: string): string {
   return repoRoot.replace(/\\/g, '/');
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

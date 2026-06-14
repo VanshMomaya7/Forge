@@ -15,6 +15,13 @@ export type {
   TaskUpdatedEvent,
   TaskUpdatedListener
 } from './event-bus.js';
+export {
+  notificationToStep,
+  runCodexAppServer,
+  runRealCodexAgent,
+  spawnCodexAppServer
+} from './codex-app-server.js';
+export type { CodexAppServerTransport } from './codex-app-server.js';
 export { forkAndRun, promote } from './orchestrator.js';
 export { runAgent } from './run-agent.js';
 export { get, list, upsert } from './store.js';
