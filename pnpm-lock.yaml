@@ -30,6 +30,15 @@ importers:
         specifier: ^4.0.14
         version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@1.21.7)(tsx@4.22.4))
 
+  packages/compose:
+    dependencies:
+      '@forge/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: ^4.2.0
+        version: 4.4.3
+
   packages/core:
     dependencies:
       '@forge/evals':

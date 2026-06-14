@@ -3,7 +3,8 @@
   "references": [
     { "path": "./shared" },
     { "path": "./packages/core" },
-    { "path": "./packages/evals" }
+    { "path": "./packages/evals" },
+    { "path": "./packages/compose" }
   ],
   "compilerOptions": {
     "target": "ES2022",
