@@ -1,6 +1,12 @@
 import type { GenerateRubric, Rubric } from '@forge/shared/contracts';
 
-import { DEFAULT_CRITERIA, DEFAULT_RUBRIC_ID, DEFAULT_WEIGHTS } from './constants.js';
+import {
+  DEFAULT_CRITERIA,
+  DEFAULT_RUBRIC_ID,
+  DEFAULT_WEIGHTS,
+  MAX_RUBRIC_CRITERIA,
+  MIN_RUBRIC_CRITERIA
+} from './constants.js';
 import { generateRubricWithModel } from './model-judge.js';
 import { RubricSchema } from './schemas.js';
 
@@ -37,29 +43,31 @@ export function clearRubricCache(): void {
 }
 
 function buildCriteria(repo: string, intent: string): string[] {
-  const criteria = [...DEFAULT_CRITERIA];
+  const criteria: string[] = [...DEFAULT_CRITERIA];
   const lowerIntent = intent.toLowerCase();
 
   if (lowerIntent.includes('deploy') || lowerIntent.includes('ship')) {
-    return [...criteria, `keeps ${repo} deployable`];
+    criteria.push(`keeps ${repo} deployable`);
   }
 
   if (lowerIntent.includes('regression') || lowerIntent.includes('failing')) {
-    return [...criteria, 'reduces regression risk'];
+    criteria.push('reduces regression risk');
   }
 
-  return criteria;
+  if (lowerIntent.includes('auth') || lowerIntent.includes('login') || lowerIntent.includes('rate')) {
+    criteria.push('preserves security and abuse resistance');
+  }
+
+  return Array.from(new Set(criteria)).slice(0, MAX_RUBRIC_CRITERIA);
 }
 
 function normalizeRubric(candidate: Rubric): Rubric {
-  const weightTotal = candidate.weights.reduce((sum, weight) => sum + weight, 0);
-  const weights =
-    candidate.criteria.length === candidate.weights.length && weightTotal > 0
-      ? candidate.weights.map((weight) => weight / weightTotal)
-      : [...DEFAULT_WEIGHTS];
+  const criteria = normalizeCriteria(candidate.criteria);
+  const weights = normalizeWeights(candidate.weights, criteria.length);
   const rubric = {
     ...candidate,
-    criteria: candidate.criteria.slice(0, weights.length),
+    id: candidate.id.trim() || DEFAULT_RUBRIC_ID,
+    criteria,
     weights
   };
   const parsed = RubricSchema.safeParse(rubric);
@@ -75,8 +83,54 @@ function normalizeRubric(candidate: Rubric): Rubric {
   };
 }
 
+function normalizeCriteria(criteria: string[]): string[] {
+  const normalized = Array.from(
+    new Set(criteria.map((criterion) => criterion.trim()).filter(Boolean))
+  ).slice(0, MAX_RUBRIC_CRITERIA);
+
+  while (normalized.length < MIN_RUBRIC_CRITERIA) {
+    normalized.push(DEFAULT_CRITERIA[normalized.length] ?? `criterion ${normalized.length + 1}`);
+  }
+
+  return normalized;
+}
+
+function normalizeWeights(weights: number[], count: number): number[] {
+  const fallback = count === DEFAULT_WEIGHTS.length ? [...DEFAULT_WEIGHTS] : equalWeights(count);
+  const usable = weights
+    .slice(0, count)
+    .map((weight) => (Number.isFinite(weight) && weight > 0 ? weight : 0));
+  const total = usable.reduce((sum, weight) => sum + weight, 0);
+
+  if (usable.length !== count || total <= 0) {
+    return fallback;
+  }
+
+  return usable.map((weight) => weight / total);
+}
+
+function equalWeights(count: number): number[] {
+  return Array.from({ length: count }, () => 1 / count);
+}
+
 function stableKey(value: unknown): string {
-  return JSON.stringify(value, Object.keys((value ?? {}) as Record<string, unknown>).sort());
+  return stableStringify(value);
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${stableStringify(nested)}`);
+
+    return `{${entries.join(',')}}`;
+  }
+
+  return JSON.stringify(value);
 }
 
 function hashLabel(input: string): string {

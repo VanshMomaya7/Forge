@@ -1,24 +1,29 @@
-import { gate } from './gate.js';
-import { generateRubric } from './rubric.js';
-import { score } from './score.js';
+import { runReplayChecks } from './checks.js';
+import { checkTask } from './checks.js';
 import { replayFixtures } from './fixtures.js';
 
 const rows = [];
 
 for (const fixture of replayFixtures) {
-  const rubric = await generateRubric(fixture.task.context);
-  const result = await score(fixture.task, fixture.step, rubric);
-  const verdict = gate(result);
+  const decision = await checkTask(fixture.task, fixture.step);
 
   rows.push({
     fixture: fixture.name,
-    plan: result.planAdherence.toFixed(2),
-    tools: result.toolCorrectness.toFixed(2),
-    completion: result.taskCompletion.toFixed(2),
-    overall: result.overall.toFixed(2),
-    verdict,
-    notes: result.notes ?? ''
+    plan: decision.score.planAdherence.toFixed(2),
+    tools: decision.score.toolCorrectness.toFixed(2),
+    completion: decision.score.taskCompletion.toFixed(2),
+    overall: decision.score.overall.toFixed(2),
+    verdict: decision.verdict,
+    notes: decision.score.notes ?? ''
   });
 }
 
 console.table(rows);
+
+const checks = await runReplayChecks();
+const failed = checks.filter((check) => !check.passed && check.severity === 'error');
+
+if (failed.length > 0) {
+  console.table(failed);
+  process.exitCode = 1;
+}

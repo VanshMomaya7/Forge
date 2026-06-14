@@ -1,7 +1,7 @@
 import type { Rubric, Score } from '@forge/shared/contracts';
 import type { ScoreResult } from '@forge/shared/task';
 
-import { BLOCK_OVERALL_THRESHOLD } from './constants.js';
+import { BLOCK_OVERALL_THRESHOLD, MAX_NOTES_LENGTH } from './constants.js';
 import { clamp01, hashToRange, roundScore, weightedOverall } from './math.js';
 import { scoreWithModel } from './model-judge.js';
 import { ScoreResultSchema } from './schemas.js';
@@ -49,6 +49,22 @@ function scoreHeuristically(
     text.includes('multi instance');
   const usesInMemoryCounter = stepText.includes('in-memory') || stepText.includes('memory counter');
   const usesRedis = stepText.includes('redis') || stepText.includes('sliding window');
+  const solvesDifferentTarget =
+    stepText.includes('different endpoint') ||
+    stepText.includes('/api/register') ||
+    stepText.includes('/api/signup');
+  const incompleteSignal =
+    stepText.includes('todo') ||
+    stepText.includes('not implemented') ||
+    stepText.includes('stub only') ||
+    stepText.includes('skipped');
+  const unsafeSignal =
+    stepText.includes('hardcoded secret') ||
+    stepText.includes('disable auth') ||
+    stepText.includes('bypass') ||
+    stepText.includes('eval failed') ||
+    stepText.includes('test failed') ||
+    stepText.includes('error:');
   const editsCode =
     stepText.includes('diff') ||
     stepText.includes('patch') ||
@@ -67,6 +83,11 @@ function scoreHeuristically(
     toolCorrectness = 0.42;
     taskCompletion = 0.46;
     notes.push('Blocked: in-memory counter breaks the distributed rate-limit plan.');
+  } else if (solvesDifferentTarget) {
+    planAdherence = 0.42;
+    toolCorrectness = Math.max(toolCorrectness, 0.98);
+    taskCompletion = Math.max(taskCompletion, 0.98);
+    notes.push('Redirect: step appears technically plausible but targets the wrong surface.');
   } else if (distributedRequired && usesRedis) {
     planAdherence = Math.max(planAdherence, 0.92);
     toolCorrectness = Math.max(toolCorrectness, 0.9);
@@ -81,6 +102,22 @@ function scoreHeuristically(
   if (testsMentioned) {
     toolCorrectness += 0.03;
     taskCompletion += 0.03;
+  } else if (editsCode) {
+    toolCorrectness -= 0.04;
+    notes.push('No verification evidence was reported.');
+  }
+
+  if (incompleteSignal) {
+    planAdherence -= 0.12;
+    taskCompletion -= 0.2;
+    notes.push('Incomplete implementation signal detected.');
+  }
+
+  if (unsafeSignal) {
+    planAdherence -= 0.16;
+    toolCorrectness -= 0.2;
+    taskCompletion -= 0.12;
+    notes.push('Unsafe or failing execution signal detected.');
   }
 
   const partial = {
@@ -94,7 +131,7 @@ function scoreHeuristically(
     rubricPass: overall >= BLOCK_OVERALL_THRESHOLD,
     ...partial,
     overall,
-    notes: notes.join(' ')
+    notes: notes.join(' ').slice(0, MAX_NOTES_LENGTH)
   };
 }
 
@@ -106,12 +143,13 @@ export function fallbackScore(notes = 'Evaluator fallback: unable to score safel
 }
 
 export function sanitizeScore(candidate: ScoreResult): ScoreResult {
+  const overall = roundScore(clamp01(candidate.overall));
   const sanitized: ScoreResult = {
-    rubricPass: Boolean(candidate.rubricPass),
+    rubricPass: overall >= BLOCK_OVERALL_THRESHOLD,
     planAdherence: roundScore(clamp01(candidate.planAdherence)),
     toolCorrectness: roundScore(clamp01(candidate.toolCorrectness)),
     taskCompletion: roundScore(clamp01(candidate.taskCompletion)),
-    overall: roundScore(clamp01(candidate.overall))
+    overall
   };
 
   if (candidate.notes !== undefined) {

@@ -1,7 +1,7 @@
 import type { Rubric } from '@forge/shared/contracts';
 import type { ScoreResult, Step, Task } from '@forge/shared/task';
 
-import { BLOCK_OVERALL_THRESHOLD } from './constants.js';
+import { BLOCK_OVERALL_THRESHOLD, JUDGE_TIMEOUT_MS, MAX_NOTES_LENGTH } from './constants.js';
 import { clamp01, roundScore, weightedOverall } from './math.js';
 import { RubricSchema, ScoreResultSchema } from './schemas.js';
 
@@ -18,7 +18,7 @@ export async function generateRubricWithModel(
   try {
     const { default: OpenAI } = await import('openai');
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const response = await client.responses.create({
+    const response = await withTimeout(client.responses.create({
       model: process.env.FORGE_EVALS_JUDGE_MODEL ?? JUDGE_MODEL,
       temperature: JUDGE_TEMPERATURE,
       max_output_tokens: 700,
@@ -33,7 +33,7 @@ export async function generateRubricWithModel(
           content: JSON.stringify({ context })
         }
       ]
-    } as never);
+    } as never));
     const json = parseJsonObject(extractText(response));
     const parsed = RubricSchema.safeParse(json);
 
@@ -55,7 +55,7 @@ export async function scoreWithModel(
   try {
     const { default: OpenAI } = await import('openai');
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const response = await client.responses.create({
+    const response = await withTimeout(client.responses.create({
       model: process.env.FORGE_EVALS_JUDGE_MODEL ?? JUDGE_MODEL,
       temperature: JUDGE_TEMPERATURE,
       max_output_tokens: 500,
@@ -78,7 +78,7 @@ export async function scoreWithModel(
           })
         }
       ]
-    } as never);
+    } as never));
     const json = parseJsonObject(extractText(response));
     const planAdherence = roundScore(clamp01(Number(json.planAdherence)));
     const toolCorrectness = roundScore(clamp01(Number(json.toolCorrectness)));
@@ -93,7 +93,7 @@ export async function scoreWithModel(
     };
 
     if (typeof json.notes === 'string') {
-      candidate.notes = json.notes.slice(0, 240);
+      candidate.notes = json.notes.slice(0, MAX_NOTES_LENGTH);
     }
 
     const parsed = ScoreResultSchema.safeParse(candidate);
@@ -110,11 +110,31 @@ export function extractText(response: unknown): string {
     return outputText;
   }
 
+  const output = (response as { output?: unknown }).output;
+
+  if (Array.isArray(output)) {
+    const text = output
+      .flatMap((item) => {
+        const content = (item as { content?: unknown }).content;
+        return Array.isArray(content) ? content : [];
+      })
+      .map((content) => {
+        const textValue = (content as { text?: unknown }).text;
+        return typeof textValue === 'string' ? textValue : '';
+      })
+      .filter(Boolean)
+      .join('\n');
+
+    if (text.length > 0) {
+      return text;
+    }
+  }
+
   return JSON.stringify(response);
 }
 
 export function parseJsonObject(text: string): Record<string, unknown> {
-  const trimmed = text.trim();
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   const start = trimmed.indexOf('{');
   const end = trimmed.lastIndexOf('}');
 
@@ -127,4 +147,21 @@ export function parseJsonObject(text: string): Record<string, unknown> {
   return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : {};
+}
+
+async function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Judge model timed out after ${JUDGE_TIMEOUT_MS}ms`));
+    }, JUDGE_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
