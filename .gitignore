@@ -8,5 +8,6 @@ coverage/
 .DS_Store
 Thumbs.db
 forge-worktrees/
+forge-worktrees-test/
 .codex-generated-schemas/
 .codex-runtime/

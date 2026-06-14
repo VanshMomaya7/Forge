@@ -1,16 +1,31 @@
+import { execFile } from 'node:child_process';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import type { Task } from '@forge/shared/task';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildComponents } from '../src/build-components.js';
 import { selectBest } from '../src/compose-back-half.js';
 import { decompose } from '../src/decompose.js';
 import { runTask } from '../src/router.js';
 
-const repoRoot = path.resolve('.');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const execFileAsync = promisify(execFile);
+const testWorktreeRoots = new Set<string>();
+let taskSequence = 0;
 
 describe('compose stubs', () => {
+  afterEach(async () => {
+    for (const root of testWorktreeRoots) {
+      await removeRegisteredWorktrees(root);
+      await rm(root, { recursive: true, force: true });
+    }
+    testWorktreeRoots.clear();
+  });
+
   it('decomposes a 3D model website into explicit component contracts', async () => {
     const graph = await decompose(makeTask());
 
@@ -48,6 +63,7 @@ describe('compose stubs', () => {
       'model:online',
       'shell:0'
     ]);
+    expect(new Set(graph.candidates.map((candidate) => candidate.worktree))).toHaveLength(4);
     expect(graph.candidates.every((candidate) => candidate.steps.length === 1)).toBe(true);
     expect(graph.candidates.every((candidate) => candidate.score?.overall)).toBe(true);
     expect(graph.candidates.find((candidate) => candidate.variantId === 'model:blender')?.artifactPath)
@@ -86,13 +102,19 @@ describe('compose stubs', () => {
 });
 
 function makeTask(): Task {
+  taskSequence += 1;
+  const id = `compose-task-${taskSequence}`;
+  const worktreeRoot = path.join(repoRoot, 'forge-worktrees-test', id);
+  testWorktreeRoots.add(worktreeRoot);
+
   return {
-    id: 'compose-task-1',
+    id,
     origin: 'human',
     intent: 'build me a 3D model website',
     context: {
       repo: repoRoot,
-      worktreeRoot: path.join(repoRoot, 'forge-worktrees-test', 'compose-task-1')
+      worktreeRoot,
+      maxSteps: 1
     },
     mode: 'compose',
     steps: [],
@@ -100,4 +122,34 @@ function makeTask(): Task {
     createdAt: 1,
     updatedAt: 1
   };
+}
+
+async function removeRegisteredWorktrees(root: string): Promise<void> {
+  const { stdout } = await execFileAsync('git', [
+    '-c',
+    `safe.directory=${repoRoot.replace(/\\/g, '/')}`,
+    '-C',
+    repoRoot,
+    'worktree',
+    'list',
+    '--porcelain'
+  ]);
+  const worktrees = stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('worktree '))
+    .map((line) => line.slice('worktree '.length))
+    .filter((worktree) => path.resolve(worktree).startsWith(path.resolve(root)));
+
+  for (const worktree of worktrees) {
+    await execFileAsync('git', [
+      '-c',
+      `safe.directory=${repoRoot.replace(/\\/g, '/')}`,
+      '-C',
+      repoRoot,
+      'worktree',
+      'remove',
+      '--force',
+      worktree
+    ]);
+  }
 }

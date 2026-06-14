@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import type { Task } from '@forge/shared/task';
@@ -10,7 +11,7 @@ import { forkAndRun, promote } from '../src/orchestrator.js';
 import { subscribe } from '../src/event-bus.js';
 
 const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve('.');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const testWorktreeRoots = new Set<string>();
 
 describe('orchestrator', () => {

@@ -16,11 +16,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@forge/evals": "workspace:*",
     "@forge/shared": "workspace:*",
     "@openai/codex": "^0.139.0",
     "@openai/codex-sdk": "0.139.0",
     "openai": "^6.42.0",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1"
