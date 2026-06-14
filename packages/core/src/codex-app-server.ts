@@ -107,7 +107,14 @@ export function notificationToStep(
 }
 
 export function spawnCodexAppServer(codexBin = resolveCodexBin()): CodexAppServerTransport {
-  const child = spawn(codexBin, ['app-server', '--stdio'], {
+  const args = ['app-server'];
+  const reasoning = process.env.FORGE_CODEX_REASONING;
+  if (reasoning) {
+    args.push('-c', `model_reasoning_effort=${reasoning}`);
+  }
+  args.push('--stdio');
+
+  const child = spawn(codexBin, args, {
     env: process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: isCommandShim(codexBin)

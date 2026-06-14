@@ -56,6 +56,9 @@ importers:
       '@openai/codex-sdk':
         specifier: 0.139.0
         version: 0.139.0
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.1
       openai:
         specifier: ^6.42.0
         version: 6.42.0(ws@8.21.0)(zod@4.4.3)
@@ -90,6 +93,12 @@ importers:
 
   packages/surfaces:
     dependencies:
+      '@forge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@forge/shared':
+        specifier: workspace:*
+        version: link:../../shared
       express:
         specifier: ^4.21.2
         version: 4.22.2

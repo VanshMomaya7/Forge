@@ -2,6 +2,7 @@ import type { RunAgent } from '@forge/shared/contracts';
 import type { Step } from '@forge/shared/task';
 
 import { runRealCodexAgent } from './codex-app-server.js';
+import { runCodexExecAgent } from './codex-exec.js';
 
 const DEFAULT_STEP_COUNT = 3;
 const STEP_DELAY_MS = 500;
@@ -49,7 +50,11 @@ function stepCount(maxSteps: number | undefined): number {
 
 export const runAgent: RunAgent = async function* runAgent(task, cfg) {
   if (useRealCodex()) {
-    yield* runRealCodexAgent(task, cfg);
+    // exec runs autonomously and writes files to disk (the app-server turn tends
+    // to answer conversationally). app-server remains available behind a flag.
+    const runner =
+      process.env.FORGE_CODEX_RUNNER === 'app-server' ? runRealCodexAgent : runCodexExecAgent;
+    yield* runner(task, cfg);
     return;
   }
 

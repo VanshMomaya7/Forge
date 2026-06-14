@@ -1,64 +1,72 @@
 import type { TaskUpdatedEvent } from "../shared/task";
 import { isTaskUpdatedEvent } from "../shared/task";
-import { startMockTaskStream } from "../mock/mockEmitter";
 
-export type StreamMode = "connecting" | "ws" | "mock";
+export type StreamMode = "connecting" | "ws";
 
 export interface ConnectTaskUpdatesOptions {
-  wsUrl?: string;
-  repo?: string;
+  wsUrl: string;
   onEvent: (event: TaskUpdatedEvent) => void;
   onModeChange?: (mode: StreamMode) => void;
 }
 
+const RECONNECT_BASE_MS = 800;
+const RECONNECT_MAX_MS = 8000;
+
+// Always consumes the real task.updated websocket bus and reconnects on drops.
+// There is no mock fallback — the cockpit only ever shows real runs.
 export function connectTaskUpdates(options: ConnectTaskUpdatesOptions): () => void {
-  if (!options.wsUrl) {
-    options.onModeChange?.("mock");
-    return startMockTaskStream({
-      onEvent: options.onEvent,
-      repo: options.repo,
-      loop: true,
-    });
+  let disposed = false;
+  let socket: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let attempts = 0;
+
+  function scheduleReconnect(): void {
+    if (disposed || reconnectTimer) return;
+    const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempts);
+    attempts += 1;
+    options.onModeChange?.("connecting");
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      connect();
+    }, delay);
   }
 
-  options.onModeChange?.("connecting");
+  function connect(): void {
+    if (disposed) return;
+    options.onModeChange?.("connecting");
 
-  let disposed = false;
-  let mockCleanup: (() => void) | undefined;
-  const socket = new WebSocket(options.wsUrl);
-
-  socket.addEventListener("open", () => {
-    if (!disposed) options.onModeChange?.("ws");
-  });
-
-  socket.addEventListener("message", (message) => {
     try {
-      const event = JSON.parse(String(message.data));
-      if (isTaskUpdatedEvent(event)) options.onEvent(event);
+      socket = new WebSocket(options.wsUrl);
     } catch {
-      // Ignore malformed events so the cockpit never drops the live session.
+      scheduleReconnect();
+      return;
     }
-  });
 
-  const fallbackToMock = () => {
-    if (disposed || mockCleanup) return;
-    options.onModeChange?.("mock");
-    mockCleanup = startMockTaskStream({
-      onEvent: options.onEvent,
-      repo: options.repo,
-      loop: true,
+    socket.addEventListener("open", () => {
+      if (disposed) return;
+      attempts = 0;
+      options.onModeChange?.("ws");
     });
-  };
+    socket.addEventListener("message", (message) => {
+      try {
+        const event = JSON.parse(String(message.data));
+        if (isTaskUpdatedEvent(event)) options.onEvent(event);
+      } catch {
+        // Ignore malformed frames so the cockpit never drops the live session.
+      }
+    });
+    socket.addEventListener("error", scheduleReconnect);
+    socket.addEventListener("close", scheduleReconnect);
+  }
 
-  socket.addEventListener("error", fallbackToMock);
-  socket.addEventListener("close", fallbackToMock);
+  connect();
 
   return () => {
     disposed = true;
-    mockCleanup?.();
+    if (reconnectTimer) clearTimeout(reconnectTimer);
     if (
-      socket.readyState === WebSocket.CONNECTING ||
-      socket.readyState === WebSocket.OPEN
+      socket &&
+      (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)
     ) {
       socket.close();
     }

@@ -1,41 +1,24 @@
-export type TaskOrigin = "human" | "regression" | "subtask";
-export type Verdict = "pass" | "block" | "redirect";
-export type TaskVerdict = "running" | "won" | "lost" | "blocked" | "shipped";
+// Surfaces consumes the FROZEN shared contract from @forge/shared as the single
+// source of truth. We only keep the websocket event envelope helpers locally,
+// because those are a surfaces/transport concern, not part of the Task contract.
+export type {
+  ScoreResult,
+  Step,
+  Task,
+  TaskOrigin,
+  TaskVerdict,
+  Verdict,
+} from "@forge/shared/task";
+export type {
+  BuildStrategy,
+  ComponentCandidate,
+  ComponentGraph,
+  ComponentSpec,
+  InterfaceContract,
+  OrchestrationMode,
+} from "@forge/shared/component";
 
-export interface ScoreResult {
-  rubricPass: boolean;
-  planAdherence: number;
-  toolCorrectness: number;
-  taskCompletion: number;
-  overall: number;
-  notes?: string;
-}
-
-export interface Step {
-  id: string;
-  agentId: string;
-  action: string;
-  output: string;
-  scores?: ScoreResult;
-  verdict?: Verdict;
-  ts: number;
-}
-
-export interface Task {
-  id: string;
-  parentId?: string;
-  origin: TaskOrigin;
-  intent: string;
-  context: Record<string, unknown>;
-  plan?: string[];
-  steps: Step[];
-  scores?: ScoreResult;
-  verdict: TaskVerdict;
-  artifact?: { diff?: string; deployUrl?: string };
-  telemetry?: { p95Ms?: number; errorRate?: number };
-  createdAt: number;
-  updatedAt: number;
-}
+import type { Task } from "@forge/shared/task";
 
 export interface TaskUpdatedEvent {
   type: "task.updated";

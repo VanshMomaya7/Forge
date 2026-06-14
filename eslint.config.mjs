@@ -7,8 +7,12 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
+      'forge-worktrees/**',
       'forge-worktrees-test/**',
+      'forge-sites/**',
       'packages/compose/.local-compose/**',
+      '.codex-runtime/**',
+      '**/.smoke*/**',
       '**/*.tsbuildinfo'
     ]
   },

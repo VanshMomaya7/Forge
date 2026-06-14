@@ -11,6 +11,8 @@
     "server": "tsx src/server/index.ts"
   },
   "dependencies": {
+    "@forge/core": "workspace:*",
+    "@forge/shared": "workspace:*",
     "express": "^4.21.2",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",

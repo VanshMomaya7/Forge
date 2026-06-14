@@ -33,6 +33,8 @@ export type { CodexAppServerTransport } from './codex-app-server.js';
 export { buildComponents } from './build-components.js';
 export { integrationGate, integrate, selectBest } from '@forge/compose';
 export { decompose } from './decompose.js';
+export { assembleSite, buildPreviewHtml, deploySite, isSiteGraph, siteGate } from './site/index.js';
+export type { SiteAssembly, SiteDeployResult, SiteGateResult } from './site/index.js';
 export { forkAndRun, promote } from './orchestrator.js';
 export { runTask } from './router.js';
 export type { RunTaskOptions } from './router.js';

@@ -21,14 +21,23 @@ import {
 import { IntentCard } from "./components/IntentCard";
 import { ShipHealStrip } from "./components/ShipHealStrip";
 import { SwarmSection } from "./components/SwarmSection";
-import { submitIntake } from "./adapters/intake";
-import { forkCurrentTask } from "./adapters/swarm";
-import { startMockTaskStream } from "./mock/mockEmitter";
 import type { Task, TaskUpdatedEvent } from "./shared/task";
 import { connectTaskUpdates, type StreamMode } from "./stream/connectTaskUpdates";
 
 const repo = import.meta.env.VITE_FORGE_REPO || "forge-demo";
-const wsUrl = import.meta.env.VITE_FORGE_WS_URL || "";
+const wsUrl = import.meta.env.VITE_FORGE_WS_URL || "ws://127.0.0.1:4317/ws";
+const apiBase = import.meta.env.VITE_FORGE_API_URL || deriveApiBase(wsUrl);
+
+function deriveApiBase(ws: string): string {
+  if (!ws) return "";
+  try {
+    const url = new URL(ws);
+    const protocol = url.protocol === "wss:" ? "https:" : "http:";
+    return `${protocol}//${url.host}`;
+  } catch {
+    return "";
+  }
+}
 
 const pageShell =
   "min-h-screen bg-[radial-gradient(circle_at_25%_15%,rgba(59,130,246,0.10),transparent_32rem),linear-gradient(180deg,#ffffff_0%,#fafafa_48%,#f4f4f5_100%)] text-zinc-950";
@@ -45,7 +54,7 @@ export default function App() {
   const [shipTask, setShipTask] = useState<Task | null>(null);
   const [feed, setFeed] = useState<string[]>([]);
   const [mode, setMode] = useState<StreamMode>("connecting");
-  const [intent, setIntent] = useState("Add rate-limiting to /api/login");
+  const [intent, setIntent] = useState("Build me a 3D game using three.js");
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const navigate = (nextPath: string) => {
@@ -84,7 +93,6 @@ export default function App() {
   useEffect(() => {
     cleanupRef.current = connectTaskUpdates({
       wsUrl,
-      repo,
       onEvent: handleEvent,
       onModeChange: setMode,
     });
@@ -92,35 +100,41 @@ export default function App() {
     return () => cleanupRef.current?.();
   }, []);
 
-  const runMock = (baseTask?: Task) => {
-    cleanupRef.current?.();
-    setMode("mock");
-    setFeed([]);
-    cleanupRef.current = startMockTaskStream({
-      onEvent: handleEvent,
-      baseTask,
-      intent,
-      repo,
-      loop: false,
-    });
-  };
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = intent.trim();
     if (!trimmed) return;
 
-    const created = await submitIntake(trimmed, {
-      repo,
-      forkAndRun: async () => [],
-    });
-    runMock(created);
+    try {
+      const response = await fetch(`${apiBase}/api/intake`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ intent: trimmed }),
+      });
+      if (!response.ok) throw new Error(`intake failed: ${response.status}`);
+      const data = (await response.json()) as { task: Task };
+      setTask(data.task);
+      setShipTask(null);
+      setFeed([`task ${data.task.id} accepted -> running compose`]);
+    } catch (error) {
+      setFeed((current) => [
+        `intake error: ${error instanceof Error ? error.message : String(error)}`,
+        ...current,
+      ]);
+    }
   };
 
   const handleSwarm = async () => {
     if (!task) return;
-    const children = await forkCurrentTask(task);
-    if (!children.length) runMock(task);
+    try {
+      await fetch(`${apiBase}/api/tasks/${task.id}/swarm`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ n: 3 }),
+      });
+    } catch {
+      // surfaced via the live stream; ignore here
+    }
   };
 
   const visibleTask = task ?? {
@@ -128,6 +142,7 @@ export default function App() {
     origin: "human" as const,
     intent,
     context: { repo },
+    mode: "compose" as const,
     steps: [],
     verdict: "running" as const,
     createdAt: Date.now(),
@@ -142,7 +157,6 @@ export default function App() {
         mode={mode}
         onIntentChange={setIntent}
         onNavigate={navigate}
-        onRunMock={runMock}
         onSubmit={handleSubmit}
         onSwarm={handleSwarm}
         shipTask={shipTask ?? visibleTask}
@@ -155,10 +169,7 @@ export default function App() {
     <LandingPage
       mode={mode}
       onNavigate={navigate}
-      onRunDemo={() => {
-        runMock();
-        navigate("/surfaces");
-      }}
+      onRunDemo={() => navigate("/surfaces")}
     />
   );
 }
@@ -204,7 +215,7 @@ function LandingPage({ mode, onNavigate, onRunDemo }: LandingPageProps) {
                 onClick={onRunDemo}
               >
                 <Play size={16} aria-hidden="true" />
-                Run the mock loop
+                Open the cockpit
               </button>
             </div>
           </div>
@@ -254,7 +265,6 @@ interface SurfacesPageProps {
   mode: StreamMode;
   onIntentChange: (intent: string) => void;
   onNavigate: (path: string) => void;
-  onRunMock: (task?: Task) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSwarm: () => void;
   shipTask: Task;
@@ -267,7 +277,6 @@ function SurfacesPage({
   mode,
   onIntentChange,
   onNavigate,
-  onRunMock,
   onSubmit,
   onSwarm,
   shipTask,
@@ -318,7 +327,7 @@ function SurfacesPage({
               <label className="sr-only" htmlFor="intent-input">
                 Intake
               </label>
-              <div className="grid grid-cols-[minmax(0,1fr)_40px_40px_40px] gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_40px_40px] gap-2">
                 <input
                   className="h-10 min-w-0 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400"
                   id="intent-input"
@@ -331,14 +340,6 @@ function SurfacesPage({
                 </button>
                 <button className={iconButton} type="button" onClick={onSwarm} aria-label="Run swarm">
                   <GitFork size={17} aria-hidden="true" />
-                </button>
-                <button
-                  className={iconButton}
-                  type="button"
-                  onClick={() => onRunMock()}
-                  aria-label="Play mock stream"
-                >
-                  <Play size={17} aria-hidden="true" />
                 </button>
               </div>
             </form>
@@ -359,7 +360,14 @@ function SurfacesPage({
             </div>
 
             <IntentCard task={task} />
-            <SwarmSection task={task} />
+            <SwarmSection
+              task={task}
+              previewUrl={
+                task.integration?.passed
+                  ? `${apiBase}/preview/${encodeURIComponent(task.id)}`
+                  : undefined
+              }
+            />
             <ShipHealStrip task={shipTask} feed={feed} />
           </section>
 
@@ -445,7 +453,6 @@ function navItemClass(active: boolean): string {
 }
 
 function modeDotClass(mode: StreamMode): string {
-  if (mode === "mock") return "size-2 rounded-full bg-blue-600";
   if (mode === "connecting") return "size-2 rounded-full bg-amber-500";
   return "size-2 rounded-full bg-emerald-500";
 }

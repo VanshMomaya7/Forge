@@ -1,4 +1,4 @@
-import type { Task, TaskOrigin } from "../shared/task";
+import type { OrchestrationMode, Task, TaskOrigin } from "../shared/task";
 
 let taskSequence = 0;
 
@@ -6,6 +6,7 @@ export function createTask(
   origin: TaskOrigin,
   intent: string,
   context: Task["context"] = {},
+  mode: OrchestrationMode = "compose",
 ): Task {
   const now = Date.now();
   taskSequence += 1;
@@ -15,6 +16,7 @@ export function createTask(
     origin,
     intent: intent.trim(),
     context,
+    mode,
     steps: [],
     verdict: "running",
     createdAt: now,

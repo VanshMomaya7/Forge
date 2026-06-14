@@ -94,11 +94,62 @@ async function decomposeWithModel(task: Task): Promise<ComponentGraph | undefine
 }
 
 function fallbackGraph(task: Task): ComponentGraph {
+  if (isThreeJsGame(task.intent)) {
+    return gameSiteGraph(task);
+  }
+
   if (isThreeDimensionalWebsite(task.intent)) {
     return modelWebsiteGraph();
   }
 
   return genericGraph(task);
+}
+
+// A three.js game decomposes into the swappable, raced "game" component (N peer
+// Codex agents each build the whole playable game in their own worktree) plus an
+// "assign" shell that mounts the winning game. selectBest -> integrate -> deploy
+// produces one Codex Sites (vinext on Cloudflare Workers) deployment.
+function gameSiteGraph(task: Task): ComponentGraph {
+  const variants = Math.max(2, positiveInt(task.context.variants) ?? 3);
+
+  return {
+    components: [
+      {
+        id: 'game',
+        goal: [
+          'Write a COMPLETE, self-contained, playable 3D game as a single React client component using three.js.',
+          'Create the file Game.tsx at the root of your worktree (path: Game.tsx).',
+          'Hard requirements: the first line must be the string "use client"; import * as THREE from "three";',
+          'export a default React function component named Game.',
+          'Mount a full-viewport canvas via a useRef + useEffect, build a THREE.Scene / PerspectiveCamera / WebGLRenderer,',
+          'add lights and at least one interactive, animated mechanic driven by requestAnimationFrame, handle resize,',
+          'and dispose the renderer + cancel the animation frame on unmount.',
+          'Do NOT import any local/project files. Only "react" and "three". Keep everything in this one file.'
+        ].join(' '),
+        contract: {
+          produces: ['Game.tsx'],
+          entry: 'export default React client component Game using three'
+        },
+        strategy: 'race',
+        variants
+      },
+      {
+        id: 'shell',
+        goal: [
+          'Write the file page.tsx at the root of your worktree (path: page.tsx).',
+          'It must be a React client component: the first line must be the string "use client";',
+          'import Game from "./Game"; export a default function Page that renders <Game /> filling the viewport.'
+        ].join(' '),
+        contract: {
+          produces: ['page.tsx'],
+          consumes: ['Game.tsx'],
+          entry: 'page.tsx renders <Game/>'
+        },
+        strategy: 'assign'
+      }
+    ],
+    candidates: []
+  };
 }
 
 function modelWebsiteGraph(): ComponentGraph {
@@ -233,6 +284,23 @@ function sanitizeId(value: string): string {
     .slice(0, 48);
 
   return sanitized || 'component';
+}
+
+function isThreeJsGame(intent: string): boolean {
+  const lower = intent.toLowerCase();
+  if (lower.includes('three.js') || lower.includes('threejs')) {
+    return true;
+  }
+
+  const isGame = lower.includes('game') || lower.includes('playable');
+  const is3d = lower.includes('3d') || lower.includes('three') || lower.includes('webgl');
+
+  return isGame && is3d;
+}
+
+function positiveInt(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : undefined;
 }
 
 function isThreeDimensionalWebsite(intent: string): boolean {

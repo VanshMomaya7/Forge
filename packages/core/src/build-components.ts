@@ -192,15 +192,24 @@ function candidateTaskFor(task: Task, component: ComponentSpec, candidate: Compo
 }
 
 function componentPrompt(task: Task, component: ComponentSpec, variantId: string): string {
+  const produced = component.contract.produces?.[0];
+
   return [
-    `Build Forge component "${component.id}" for parent intent: ${task.intent}`,
+    'You are an autonomous coding agent. Your current working directory is a git worktree.',
+    `Overall product: ${task.intent}`,
     '',
-    `Component goal: ${component.goal}`,
+    `Build component "${component.id}" (variant ${variantId}).`,
+    `Goal: ${component.goal}`,
     `Interface contract: ${JSON.stringify(component.contract)}`,
-    `Build strategy: ${component.strategy}`,
-    `Variant: ${variantId}`,
     '',
-    'Only change files needed for this component. The candidate is swappable only if it honors the contract exactly.'
+    produced
+      ? `ACTION REQUIRED: actually CREATE the file "${produced}" in the current working ` +
+        'directory by writing it to disk with your file tools (apply_patch / shell). Do NOT ' +
+        'print the code in your reply — write the real file. Do not ask questions or wait for ' +
+        `approval. When you finish, "${produced}" must exist on disk and fully satisfy the contract.`
+      : 'Write the files required by the contract directly to disk with your file tools.',
+    '',
+    'Only create/change the files this component needs. Keep it self-contained.'
   ].join('\n');
 }
 
@@ -310,13 +319,7 @@ async function ensureCandidateArtifact(
       await mkdir(path.dirname(producedPath), { recursive: true });
     }
 
-    await writeFile(
-      producedPath,
-      produced.endsWith('.glb')
-        ? `stub glb artifact for ${candidate.variantId}\n`
-        : `stub produced artifact for ${candidate.variantId}\n`,
-      'utf8'
-    );
+    await writeFile(producedPath, producedFallbackContent(produced), 'utf8');
     return;
   }
 
@@ -364,6 +367,97 @@ async function ensureCandidateArtifact(
 
   await writeFile(candidate.artifactPath, `stub artifact for ${candidate.variantId}\n`, 'utf8');
 }
+
+function producedFallbackContent(produced: string): string {
+  const name = path.basename(produced);
+
+  if (name === 'Game.tsx') {
+    return FALLBACK_GAME_TSX;
+  }
+
+  if (name === 'page.tsx') {
+    return FALLBACK_PAGE_TSX;
+  }
+
+  if (produced.endsWith('.glb')) {
+    return 'stub glb artifact\n';
+  }
+
+  return 'stub produced artifact\n';
+}
+
+const FALLBACK_GAME_TSX = `"use client";
+import * as THREE from "three";
+import { useEffect, useRef } from "react";
+
+// Safety fallback: a minimal but real, playable three.js scene. Replaced by the
+// winning Codex agent's Game.tsx when one is produced.
+export default function Game() {
+  const ref = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1020);
+    const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 100);
+    camera.position.z = 4;
+    scene.add(new THREE.AmbientLight(0x404060));
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(2, 3, 4);
+    scene.add(light);
+
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.4, 1.4),
+      new THREE.MeshStandardMaterial({ color: 0x4f8cff, metalness: 0.3, roughness: 0.4 }),
+    );
+    scene.add(cube);
+
+    let raf = 0;
+    let targetY = 0;
+    const resize = () => {
+      const w = canvas.clientWidth || window.innerWidth;
+      const h = canvas.clientHeight || window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h || 1;
+      camera.updateProjectionMatrix();
+    };
+    const onPointer = (event: PointerEvent) => {
+      targetY = (event.clientX / window.innerWidth) * Math.PI * 2;
+    };
+    const loop = () => {
+      cube.rotation.x += 0.01;
+      cube.rotation.y += (targetY - cube.rotation.y) * 0.08 + 0.005;
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(loop);
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+    window.addEventListener("pointermove", onPointer);
+    loop();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("pointermove", onPointer);
+      renderer.dispose();
+    };
+  }, []);
+
+  return <canvas ref={ref} style={{ width: "100vw", height: "100vh", display: "block" }} />;
+}
+`;
+
+const FALLBACK_PAGE_TSX = `"use client";
+import Game from "./Game";
+
+export default function Page() {
+  return <Game />;
+}
+`;
 
 function maxSteps(task: Task): number | undefined {
   return typeof task.context.maxSteps === 'number' ? task.context.maxSteps : undefined;
