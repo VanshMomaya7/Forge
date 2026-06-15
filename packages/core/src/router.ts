@@ -6,7 +6,14 @@ import { buildComponents } from './build-components.js';
 import { decompose } from './decompose.js';
 import { emitTaskUpdated } from './event-bus.js';
 import { forkAndRun } from './orchestrator.js';
-import { assembleSite, deploySite, isSiteGraph, siteGate } from './site/index.js';
+import {
+  assembleSite,
+  deploySite,
+  isSiteGraph,
+  runSimulatedSiteCompose,
+  shouldSimulateSite,
+  siteGate
+} from './site/index.js';
 import { upsert } from './store.js';
 
 export interface RunTaskOptions {
@@ -44,18 +51,43 @@ async function runComposeTask(task: Task): Promise<Task> {
   task.graph = graph;
   publish(task);
 
-  task.graph = await buildComponents(graph, task);
-  publish(task);
+  const site = isSiteGraph(graph);
 
-  const selected = selectBest(task.graph);
-  task.selected = selected;
-  publish(task);
-
-  if (isSiteGraph(task.graph)) {
-    return runSiteCompose(task, selected, task.graph);
+  // When the Codex CLI can't run here, drive the game build through the
+  // simulated compose so the cockpit still shows a real end-to-end run.
+  if (site && (await shouldSimulateSite(task))) {
+    return runSimulatedSiteCompose(task, graph);
   }
 
-  const integration = await integrate(selected, task.graph, task);
+  try {
+    task.graph = await buildComponents(graph, task);
+    publish(task);
+
+    const selected = selectBest(task.graph);
+    task.selected = selected;
+    publish(task);
+
+    if (site) {
+      return await runSiteCompose(task, selected, task.graph);
+    }
+
+    return await runStaticCompose(task, selected, task.graph);
+  } catch (error) {
+    // A real game build that fell over (auth, sandbox, deploy) still ends in a
+    // playable result rather than a dead end.
+    if (site) {
+      return runSimulatedSiteCompose(task, graph);
+    }
+    throw error;
+  }
+}
+
+async function runStaticCompose(
+  task: Task,
+  selected: ComponentCandidate[],
+  graph: ComponentGraph
+): Promise<Task> {
+  const integration = await integrate(selected, graph, task);
   const gated = await integrationGate(integration.artifactPath, task);
   task.integration = {
     artifactPath: integration.artifactPath,

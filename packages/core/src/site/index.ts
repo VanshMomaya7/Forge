@@ -5,3 +5,4 @@ export type { SiteGateResult } from './gate.js';
 export { deploySite } from './deploy.js';
 export type { SiteDeployResult } from './deploy.js';
 export { buildPreviewHtml } from './preview.js';
+export { runSimulatedSiteCompose, shouldSimulateSite } from './simulate.js';

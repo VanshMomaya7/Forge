@@ -50,16 +50,21 @@ const MAX_VISIBLE_STEPS = 7;
 export function WorktreeForest({ task, previewUrl }: WorktreeForestProps) {
   const columns = deriveColumns(task);
   const integration = getIntegrationView(task);
-  const winnerIndex = columns.findIndex((column) => column.isWinner);
+  const winnerIndices = columns.flatMap((column, index) => (column.isWinner ? [index] : []));
   const anyWorking = columns.some(
     (column) => column.status === "working" || column.status === "spawning",
   );
-  const selecting = winnerIndex < 0 && columns.some((column) => column.steps.length > 0);
+  const selecting = winnerIndices.length === 0 && columns.some((column) => column.steps.length > 0);
   const deployUrl = integration?.deployUrl;
   const gatePassed = integration?.passed ?? false;
   const blocked = Boolean(integration) && integration?.passed === false;
 
-  const winnerLabel = winnerIndex >= 0 ? columns[winnerIndex]?.label : undefined;
+  const winnerLabel = winnerIndices.length
+    ? winnerIndices
+        .map((index) => columns[index]?.label)
+        .filter(Boolean)
+        .join(" + ")
+    : undefined;
 
   return (
     <section
@@ -102,7 +107,7 @@ export function WorktreeForest({ task, previewUrl }: WorktreeForestProps) {
       </div>
 
       {/* converging streams */}
-      <MergeStreams columns={columns} winnerIndex={winnerIndex} deployed={Boolean(deployUrl)} />
+      <MergeStreams columns={columns} winnerIndices={winnerIndices} deployed={Boolean(deployUrl)} />
 
       {/* mixture-of-agents node */}
       <MergeNode selecting={selecting} winnerLabel={winnerLabel} blocked={blocked} />
@@ -279,18 +284,19 @@ function ScoreRing({ value, status }: { value?: number; status: ColumnStatus }) 
 
 function MergeStreams({
   columns,
-  winnerIndex,
+  winnerIndices,
   deployed,
 }: {
   columns: ForestColumn[];
-  winnerIndex: number;
+  winnerIndices: number[];
   deployed: boolean;
 }) {
   const n = Math.max(columns.length, 1);
   const sources = columns.map((_, index) => ((index + 0.5) / n) * 1200);
   const mergeX = 600;
   const mergeY = 128;
-  const decided = winnerIndex >= 0;
+  const decided = winnerIndices.length > 0;
+  const winners = new Set(winnerIndices);
   const anyActive = columns.some(
     (c) => c.status === "working" || c.status === "spawning" || c.steps.length > 0,
   );
@@ -300,7 +306,7 @@ function MergeStreams({
       <svg className="h-[140px] w-full" viewBox="0 0 1200 140" preserveAspectRatio="none" aria-hidden="true">
         {sources.map((sx, index) => {
           const path = `M ${sx} 6 C ${sx} 74, ${mergeX} 60, ${mergeX} ${mergeY}`;
-          const isWinner = index === winnerIndex;
+          const isWinner = winners.has(index);
           const dim = decided && !isWinner;
           const stroke = isWinner ? EMERALD : ACCENT;
           const flowing = isWinner || (!decided && anyActive);
@@ -377,7 +383,7 @@ function MergeNode({
             {blocked
               ? "no candidate cleared the gate"
               : decided
-                ? `merged best build · Worktree ${winnerLabel}`
+                ? `composed the strongest build · Worktree${winnerLabel && winnerLabel.includes("+") ? "s" : ""} ${winnerLabel}`
                 : selecting
                   ? "scoring candidates — selecting the strongest build…"
                   : "awaiting candidates"}
@@ -427,7 +433,7 @@ function DeployNode({
               {live
                 ? "live — single merged playable build"
                 : gatePassed
-                  ? `gate passed${winnerLabel ? ` · Worktree ${winnerLabel}` : ""} — deploying…`
+                  ? `gate passed${winnerLabel ? ` · Worktree${winnerLabel.includes("+") ? "s" : ""} ${winnerLabel}` : ""} — deploying…`
                   : selecting
                     ? "waiting on Mixture-of-Agents selection"
                     : hasRun
