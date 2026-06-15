@@ -109,6 +109,33 @@ describe('three.js site compose path', () => {
     }
   });
 
+  it('ships the playable rocket game when the winning Game.tsx is empty', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'forge-asm-fb-'));
+    try {
+      const gameWorktree = path.join(root, 'wt-game');
+      await mkdir(gameWorktree, { recursive: true });
+      await writeFile(path.join(gameWorktree, 'Game.tsx'), '   ', 'utf8');
+
+      const task = makeTask('Build me a 3D game using three.js', {
+        siteRoot: path.join(root, 'site')
+      });
+      const graph = await decompose(task);
+      const selected: ComponentCandidate[] = [
+        { componentId: 'game', variantId: 'game:variant-1', worktree: gameWorktree, steps: [] }
+      ];
+
+      const result = await assembleSite(selected, graph, task);
+      const game = await readFile(path.join(result.artifactPath, 'source', 'Game.tsx'), 'utf8');
+      expect(game.toLowerCase()).toContain('asteroid');
+      const manifest = JSON.parse(
+        await readFile(path.join(result.artifactPath, 'FORGE_SITE.json'), 'utf8')
+      ) as { fallbackGame: boolean };
+      expect(manifest.fallbackGame).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('emits task.updated through the core event bus', () => {
     const events: { type: string; task: { id: string } }[] = [];
     const off = subscribe((event) => events.push(event));

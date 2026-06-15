@@ -274,3 +274,11 @@ export default function Game() {
   );
 }
 `;
+
+// Treat an empty/whitespace Game.tsx, or the legacy blue-cube fallback, as a
+// placeholder so callers (preview + deploy) swap in ROCKET_GAME_TSX and always
+// ship a real, playable game.
+export function isPlaceholderGame(source: string | null | undefined): boolean {
+  if (!source || !source.trim()) return true;
+  return source.includes('0x4f8cff') && source.includes('BoxGeometry');
+}

@@ -4,6 +4,8 @@ import path from 'node:path';
 import type { ComponentCandidate, ComponentGraph } from '@forge/shared/component';
 import type { Task } from '@forge/shared/task';
 
+import { ROCKET_GAME_TSX, isPlaceholderGame } from './rocket-game.js';
+
 export type SiteAssembly = {
   artifactPath: string;
   sourceDir: string;
@@ -47,10 +49,12 @@ export async function assembleSite(
   }
   const shell = selected.find((candidate) => candidate.componentId === 'shell');
 
-  const gameSource = await readProduced(game, 'Game.tsx');
-  if (!gameSource.trim()) {
-    throw new Error(`assembleSite: winning game ${game.variantId} produced no Game.tsx`);
-  }
+  // Ship the winning Game.tsx; if the agent produced nothing usable (empty or
+  // the legacy blue-cube fallback), deploy the playable rocket game so the live
+  // link is never an empty box.
+  const producedGame = await readProduced(game, 'Game.tsx');
+  const usedFallbackGame = isPlaceholderGame(producedGame);
+  const gameSource = usedFallbackGame ? ROCKET_GAME_TSX : producedGame;
   const pageSource = shell ? (await readProduced(shell, 'page.tsx')) || DEFAULT_PAGE_TSX : DEFAULT_PAGE_TSX;
 
   await writeFile(path.join(sourceDir, 'Game.tsx'), gameSource, 'utf8');
@@ -65,6 +69,7 @@ export async function assembleSite(
       variantId: candidate.variantId,
       overall: candidate.score?.overall
     })),
+    fallbackGame: usedFallbackGame,
     files: ['source/Game.tsx', 'source/page.tsx'],
     deps: { three: 'latest' }
   };

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { ROCKET_GAME_TSX } from './rocket-game.js';
+import { ROCKET_GAME_TSX, isPlaceholderGame } from './rocket-game.js';
 
 // Browser ESM CDN so the preview needs no local build. react-dom/jsx-runtime are
 // pinned to the import-mapped react to avoid a duplicate-React hook error.
@@ -63,12 +63,8 @@ export async function buildPreviewHtml(artifactRoot: string): Promise<string> {
 async function resolveGameSource(artifactRoot: string): Promise<string> {
   try {
     const source = await readFile(path.join(artifactRoot, 'source', 'Game.tsx'), 'utf8');
-    return isLegacyCubeFallback(source) ? ROCKET_GAME_TSX : source;
+    return isPlaceholderGame(source) ? ROCKET_GAME_TSX : source;
   } catch {
     return ROCKET_GAME_TSX;
   }
-}
-
-function isLegacyCubeFallback(source: string): boolean {
-  return source.includes('0x4f8cff') && source.includes('BoxGeometry');
 }
