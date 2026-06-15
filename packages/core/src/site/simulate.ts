@@ -15,8 +15,8 @@ import { assembleSite } from './assemble.js';
 // composed together, and the result is the staged, playable game. This keeps the
 // cockpit showing a true end-to-end run for the demo environment.
 
-const STEP_MIN_MS = 460;
-const STEP_SPREAD_MS = 540;
+const STEP_MIN_MS = 3300;
+const STEP_SPREAD_MS = 2600;
 
 const GAME_PLANS: string[][] = [
   [
@@ -87,7 +87,7 @@ export async function runSimulatedSiteCompose(task: Task, graph: ComponentGraph)
   const gameVariants = candidates.filter((candidate) => candidate.componentId === 'game');
   const shell = candidates.find((candidate) => candidate.componentId === 'shell');
 
-  await delay(520);
+  await delay(900);
 
   const jobs: Promise<void>[] = gameVariants.map((candidate, index) =>
     streamCandidate(task, populated, candidate, GAME_PLANS[index % GAME_PLANS.length]!, index * 240 + 80)
@@ -105,7 +105,7 @@ export async function runSimulatedSiteCompose(task: Task, graph: ComponentGraph)
   if (shell) shell.score = makeScore(0.9);
   publish(task, populated);
 
-  await delay(1400);
+  await delay(4200);
 
   const rankedGames = [...gameVariants].sort(
     (a, b) => (b.score?.overall ?? 0) - (a.score?.overall ?? 0)
@@ -114,13 +114,13 @@ export async function runSimulatedSiteCompose(task: Task, graph: ComponentGraph)
   task.selected = shell ? [...winners, shell] : [...winners];
   publish(task, populated);
 
-  await delay(950);
+  await delay(2600);
 
   const { artifactPath } = await assembleSite(task.selected, populated, task);
   task.integration = { artifactPath, gate: makeScore(0.92), passed: true };
   publish(task, populated);
 
-  await delay(720);
+  await delay(1600);
 
   task.artifact = { ...task.artifact, deployUrl: previewUrl(task) };
   task.verdict = 'shipped';
