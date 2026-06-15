@@ -3,9 +3,7 @@ import {
   Activity,
   Bot,
   Check,
-  ChevronDown,
   ChevronUp,
-  Cpu,
   GitFork,
   Globe2,
   LayoutDashboard,
@@ -18,10 +16,9 @@ import {
   TerminalSquare,
   Webhook,
 } from "lucide-react";
-import { IntentCard } from "./components/IntentCard";
 import { ShipHealStrip } from "./components/ShipHealStrip";
-import { SwarmSection } from "./components/SwarmSection";
-import type { Task, TaskUpdatedEvent } from "./shared/task";
+import { WorktreeForest } from "./components/WorktreeForest";
+import type { Task, TaskUpdatedEvent, TaskVerdict } from "./shared/task";
 import { connectTaskUpdates, type StreamMode } from "./stream/connectTaskUpdates";
 
 const repo = import.meta.env.VITE_FORGE_REPO || "forge-demo";
@@ -45,8 +42,6 @@ const pageWidth = "mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8";
 const panel = "rounded-xl border border-zinc-200 bg-white shadow-sm";
 const eyebrow =
   "inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-normal text-zinc-500";
-const iconButton =
-  "grid size-10 place-items-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950";
 
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
@@ -181,6 +176,7 @@ interface LandingPageProps {
 }
 
 function LandingPage({ mode, onNavigate, onRunDemo }: LandingPageProps) {
+  const panelLight = "rounded-xl border border-zinc-200 bg-white shadow-sm";
   return (
     <main className={pageShell}>
       <TopNav mode={mode} onNavigate={onNavigate} route="landing" />
@@ -220,7 +216,7 @@ function LandingPage({ mode, onNavigate, onRunDemo }: LandingPageProps) {
             </div>
           </div>
 
-          <div className={`${panel} overflow-hidden`}>
+          <div className={`${panelLight} overflow-hidden`}>
             <div className="border-b border-zinc-200 bg-zinc-50 px-5 py-4">
               <p className="text-sm font-semibold text-zinc-950">What Forge has today</p>
               <p className="mt-1 text-sm text-zinc-500">
@@ -282,118 +278,255 @@ function SurfacesPage({
   shipTask,
   task,
 }: SurfacesPageProps) {
-  return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-950">
-      <TopNav mode={mode} onNavigate={onNavigate} route="surfaces" />
+  const previewUrl = task.integration?.passed
+    ? `${apiBase}/preview/${encodeURIComponent(task.id)}`
+    : undefined;
 
-      <section className={`${pageWidth} py-6`}>
-        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className={eyebrow}>
-              <LayoutDashboard size={16} aria-hidden="true" />
-              Forge cockpit
+  return (
+    <main className="cockpit relative min-h-screen">
+      {/* ambient: drifting aurora softened by film grain, anchored to the viewport */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -left-[8%] -top-[12%] h-[40rem] w-[40rem] rounded-full bg-indigo-600/25 blur-[150px]"
+          style={{ animation: "forgeFloat 22s ease-in-out infinite" }}
+        />
+        <div
+          className="absolute -right-[8%] -top-[10%] h-[38rem] w-[38rem] rounded-full bg-violet-600/20 blur-[160px]"
+          style={{ animation: "forgeFloat 27s ease-in-out infinite reverse" }}
+        />
+        <div
+          className="absolute -bottom-[16%] left-[24%] h-[44rem] w-[44rem] rounded-full bg-sky-500/16 blur-[165px]"
+          style={{ animation: "forgeFloat 31s ease-in-out infinite" }}
+        />
+        <div
+          className="absolute bottom-[6%] right-[14%] h-[26rem] w-[26rem] rounded-full bg-cyan-400/14 blur-[140px]"
+          style={{ animation: "forgeFloat 24s ease-in-out infinite reverse" }}
+        />
+        <div className="grain absolute inset-0" />
+      </div>
+
+      <CockpitHeader mode={mode} onNavigate={onNavigate} repo={repo} />
+
+      <section className={`relative z-10 ${pageWidth} pb-16 pt-8`}>
+        {/* hero */}
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              <RadioTower size={14} aria-hidden="true" />
+              Live build · Mixture-of-Agents
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-zinc-950">
-              Live task surface
+            <h1 className="mt-3 text-5xl font-semibold leading-[1.02] tracking-tight text-zinc-50 sm:text-6xl">
+              Watch the agents forge it.
             </h1>
+            <p className="mt-3 text-sm leading-6 text-zinc-400 [overflow-wrap:anywhere]">
+              {task.intent}
+            </p>
           </div>
-          <div className="text-sm text-zinc-500">
-            Repo <span className="font-medium text-zinc-800">{repo}</span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <TaskChip label="task" value={task.id} />
+            <VerdictPill verdict={task.verdict} />
           </div>
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="grid gap-4">
-            <div className={`${panel} p-4`}>
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-10 place-items-center rounded-lg border border-zinc-200 bg-white">
-                    <Activity size={18} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Current Task</p>
-                    <p className="text-sm text-zinc-500">{task.id}</p>
-                  </div>
-                </div>
-                <StatusPill label={task.verdict} icon={<Cpu size={14} />} />
-              </div>
-            </div>
-
-            <form className={`${panel} p-3`} onSubmit={onSubmit}>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-700">
-                <Bot size={16} aria-hidden="true" />
-                Agent intake
-              </div>
-              <label className="sr-only" htmlFor="intent-input">
-                Intake
-              </label>
-              <div className="grid grid-cols-[minmax(0,1fr)_40px_40px] gap-2">
-                <input
-                  className="h-10 min-w-0 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400"
-                  id="intent-input"
-                  value={intent}
-                  onChange={(event) => onIntentChange(event.target.value)}
-                  placeholder="Type a task for Forge..."
-                />
-                <button className={iconButton} type="submit" aria-label="Create task">
-                  <SendHorizonal size={17} aria-hidden="true" />
-                </button>
-                <button className={iconButton} type="button" onClick={onSwarm} aria-label="Run swarm">
-                  <GitFork size={17} aria-hidden="true" />
-                </button>
-              </div>
-            </form>
-
-            <div className={`${panel} p-4`}>
-              <div className="mb-3 flex items-center gap-3">
-                <div className="grid size-8 place-items-center rounded-full bg-zinc-950 text-sm font-semibold text-white">
-                  K
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-zinc-950">User</p>
-                  <p className="text-xs text-zinc-500">plain-English request</p>
-                </div>
-              </div>
-              <div className="rounded-xl rounded-tl-sm border border-zinc-200 bg-zinc-50 p-4 text-base font-medium text-zinc-800 [overflow-wrap:anywhere]">
-                {task.intent}
-              </div>
-            </div>
-
-            <IntentCard task={task} />
-            <SwarmSection
-              task={task}
-              previewUrl={
-                task.integration?.passed
-                  ? `${apiBase}/preview/${encodeURIComponent(task.id)}`
-                  : undefined
-              }
+        {/* intake — same handlers, premium shell */}
+        <form className="glass mt-7 rounded-2xl p-2.5" onSubmit={onSubmit}>
+          <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-2 rounded-xl bg-white/5 px-3 py-2.5 text-xs font-semibold text-zinc-300 sm:inline-flex">
+              <Bot size={15} aria-hidden="true" />
+              Intake
+            </span>
+            <input
+              aria-label="Build intake"
+              className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-blue-500/50 focus:bg-white/[0.06]"
+              id="intent-input"
+              value={intent}
+              onChange={(event) => onIntentChange(event.target.value)}
+              placeholder="Describe what to build — e.g. Build me a 3D game using three.js"
             />
+            <button
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-zinc-50 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-white"
+              type="submit"
+            >
+              <SendHorizonal size={16} aria-hidden="true" />
+              <span className="hidden sm:inline">Forge it</span>
+            </button>
+            <button
+              className="grid h-11 w-11 flex-none place-items-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:border-white/20 hover:text-white"
+              type="button"
+              onClick={onSwarm}
+              aria-label="Fork a swarm of variants"
+              title="Fork a swarm of variants"
+            >
+              <GitFork size={17} aria-hidden="true" />
+            </button>
+          </div>
+        </form>
+
+        {/* main grid: forest centerpiece + control rail */}
+        <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_336px]">
+          <div className="grid content-start gap-5">
+            <WorktreeForest task={task} previewUrl={previewUrl} />
+          </div>
+
+          <aside className="grid content-start gap-5">
             <ShipHealStrip task={shipTask} feed={feed} />
-          </section>
 
-          <aside className="grid content-start gap-4">
-            <ConfigPanel title="Configuration">
-              <Field label="Runtime" value="Codex App Server" icon={<TerminalSquare size={18} />} />
-              <Field label="Architecture" value="Swarm + Gate" icon={<ChevronDown size={18} />} />
-              <Field label="Event channel" value="task.updated" icon={<RadioTower size={18} />} />
-            </ConfigPanel>
+            <DarkPanel title="Configuration">
+              <DarkField
+                icon={<TerminalSquare size={16} aria-hidden="true" />}
+                label="Runtime"
+                value="Codex exec · real agents"
+              />
+              <DarkField
+                icon={<GitFork size={16} aria-hidden="true" />}
+                label="Strategy"
+                value="Worktree race → MoA gate"
+              />
+              <DarkField
+                icon={<RadioTower size={16} aria-hidden="true" />}
+                label="Event channel"
+                value="task.updated"
+              />
+            </DarkPanel>
 
-            <ConfigPanel title="Adapters">
-              <ToolToggle icon={<Bot size={18} />} label="Plain-English intake" />
-              <ToolToggle icon={<Webhook size={18} />} label="CI regression webhook" />
-              <ToolToggle icon={<GitFork size={18} />} label="Swarm trigger" />
-              <ToolToggle icon={<Search size={18} />} label="Telemetry watcher" />
-            </ConfigPanel>
-
-            <ConfigPanel title="Instruction">
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm leading-6 text-zinc-700 [overflow-wrap:anywhere]">
-                {task.intent}
-              </p>
-            </ConfigPanel>
+            <DarkPanel title="Adapters">
+              <DarkToggle icon={<Bot size={16} aria-hidden="true" />} label="Plain-English intake" />
+              <DarkToggle icon={<Webhook size={16} aria-hidden="true" />} label="CI regression webhook" />
+              <DarkToggle icon={<GitFork size={16} aria-hidden="true" />} label="Swarm trigger" />
+              <DarkToggle icon={<Search size={16} aria-hidden="true" />} label="Telemetry watcher" />
+            </DarkPanel>
           </aside>
         </div>
       </section>
     </main>
+  );
+}
+
+function CockpitHeader({
+  mode,
+  onNavigate,
+  repo: repoName,
+}: {
+  mode: StreamMode;
+  onNavigate: (path: string) => void;
+  repo: string;
+}) {
+  return (
+    <header className="sticky top-0 z-20 border-b border-white/10 bg-[#070b14]/70 backdrop-blur-xl">
+      <div className={`${pageWidth} flex min-h-16 items-center justify-between gap-4`}>
+        <button
+          className="inline-flex items-center gap-2.5 text-base font-semibold text-zinc-100"
+          type="button"
+          onClick={() => onNavigate("/")}
+        >
+          <span className="grid size-8 place-items-center rounded-lg border border-white/10 bg-gradient-to-br from-indigo-500/30 to-sky-500/20 text-indigo-100">
+            <Activity size={17} aria-hidden="true" />
+          </span>
+          Forge
+          <span className="ml-1 hidden rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:inline">
+            cockpit
+          </span>
+        </button>
+
+        <nav className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-1 md:flex">
+          <button
+            className={cockpitTabClass(false)}
+            type="button"
+            onClick={() => onNavigate("/")}
+          >
+            Landing
+          </button>
+          <button className={cockpitTabClass(true)} type="button" onClick={() => onNavigate("/surfaces")}>
+            Surfaces
+          </button>
+        </nav>
+
+        <div className="flex items-center gap-2.5">
+          <span className="hidden font-mono text-xs text-zinc-500 sm:inline">{repoName}</span>
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-zinc-200">
+            <span
+              className={`size-2 rounded-full ${mode === "ws" ? "bg-emerald-400" : "bg-amber-400"}`}
+              style={mode === "ws" ? undefined : { animation: "forgeBlink 1.1s ease-in-out infinite" }}
+              aria-hidden="true"
+            />
+            loop {mode === "ws" ? "live" : mode}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function TaskChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs">
+      <span className="uppercase tracking-wide text-zinc-500">{label}</span>
+      <span className="max-w-[180px] truncate font-mono text-zinc-300">{value}</span>
+    </span>
+  );
+}
+
+function VerdictPill({ verdict }: { verdict: TaskVerdict }) {
+  const tone: Record<TaskVerdict, { text: string; dot: string }> = {
+    running: { text: "text-blue-300", dot: "bg-blue-400" },
+    won: { text: "text-emerald-300", dot: "bg-emerald-400" },
+    shipped: { text: "text-emerald-300", dot: "bg-emerald-400" },
+    lost: { text: "text-zinc-300", dot: "bg-zinc-400" },
+    blocked: { text: "text-red-300", dot: "bg-red-400" },
+  };
+  const t = tone[verdict] ?? tone.running;
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${t.text}`}
+    >
+      <span
+        className={`size-2 rounded-full ${t.dot}`}
+        style={verdict === "running" ? { animation: "forgeBlink 1.2s ease-in-out infinite" } : undefined}
+        aria-hidden="true"
+      />
+      {verdict}
+    </span>
+  );
+}
+
+function DarkPanel({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <section className="glass rounded-2xl p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-400">{title}</h2>
+        <ChevronUp size={16} className="text-zinc-600" aria-hidden="true" />
+      </div>
+      <div className="grid gap-2.5">{children}</div>
+    </section>
+  );
+}
+
+function DarkField({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-200">
+        <span className="truncate">{value}</span>
+        <span className="flex-none text-blue-300/70">{icon}</span>
+      </div>
+    </div>
+  );
+}
+
+function DarkToggle({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3">
+      <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-200">
+        <span className="text-blue-300/70">{icon}</span>
+        <span className="truncate">{label}</span>
+      </span>
+      <span
+        className="inline-flex h-6 w-11 flex-none items-center justify-end rounded-full bg-emerald-500/80 px-1 text-white"
+        aria-label={`${label} enabled`}
+      >
+        <Check size={13} aria-hidden="true" />
+      </span>
+    </div>
   );
 }
 
@@ -452,6 +585,12 @@ function navItemClass(active: boolean): string {
   }`;
 }
 
+function cockpitTabClass(active: boolean): string {
+  return `rounded-md px-3 py-1.5 text-sm font-medium transition ${
+    active ? "bg-white/10 text-zinc-50 shadow-sm" : "text-zinc-400 hover:text-zinc-100"
+  }`;
+}
+
 function modeDotClass(mode: StreamMode): string {
   if (mode === "connecting") return "size-2 rounded-full bg-amber-500";
   return "size-2 rounded-full bg-emerald-500";
@@ -496,56 +635,6 @@ function CapabilityCard({
       <h2 className="mt-4 text-lg font-semibold text-zinc-950">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-zinc-600">{body}</p>
     </article>
-  );
-}
-
-function StatusPill({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <span className="inline-flex min-h-8 items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold uppercase text-zinc-700">
-      {icon}
-      {label}
-    </span>
-  );
-}
-
-function ConfigPanel({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section className={`${panel} p-4`}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-zinc-950">{title}</h2>
-        <ChevronUp size={18} className="text-zinc-400" aria-hidden="true" />
-      </div>
-      <div className="grid gap-3">{children}</div>
-    </section>
-  );
-}
-
-function Field({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase text-zinc-500">{label}</p>
-      <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800">
-        <span>{value}</span>
-        <span className="text-zinc-500">{icon}</span>
-      </div>
-    </div>
-  );
-}
-
-function ToolToggle({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3">
-      <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-800">
-        {icon}
-        {label}
-      </span>
-      <span
-        className="inline-flex h-6 w-11 flex-none items-center justify-end rounded-full bg-emerald-600 px-1 text-white"
-        aria-label={`${label} enabled`}
-      >
-        <Check size={14} aria-hidden="true" />
-      </span>
-    </div>
   );
 }
 
