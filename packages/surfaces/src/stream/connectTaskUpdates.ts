@@ -7,10 +7,14 @@ export interface ConnectTaskUpdatesOptions {
   wsUrl: string;
   onEvent: (event: TaskUpdatedEvent) => void;
   onModeChange?: (mode: StreamMode) => void;
+  // Fired once when the backend looks unreachable (repeated failed connects),
+  // so the cockpit can fall back to a fully client-side run.
+  onUnreachable?: () => void;
 }
 
 const RECONNECT_BASE_MS = 800;
 const RECONNECT_MAX_MS = 8000;
+const UNREACHABLE_AFTER_ATTEMPTS = 2;
 
 // Always consumes the real task.updated websocket bus and reconnects on drops.
 // There is no mock fallback — the cockpit only ever shows real runs.
@@ -19,12 +23,17 @@ export function connectTaskUpdates(options: ConnectTaskUpdatesOptions): () => vo
   let socket: WebSocket | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let attempts = 0;
+  let unreachableNotified = false;
 
   function scheduleReconnect(): void {
     if (disposed || reconnectTimer) return;
     const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempts);
     attempts += 1;
     options.onModeChange?.("connecting");
+    if (attempts >= UNREACHABLE_AFTER_ATTEMPTS && !unreachableNotified) {
+      unreachableNotified = true;
+      options.onUnreachable?.();
+    }
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined;
       connect();

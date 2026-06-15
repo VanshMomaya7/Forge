@@ -17,6 +17,8 @@ import { formatScore, getIntegrationView } from "../task/viewModel";
 interface WorktreeForestProps {
   task: Task;
   previewUrl?: string;
+  // When set, the build opens in-app (deployed build, no backend preview).
+  onPlay?: () => void;
 }
 
 type ColumnStatus = "spawning" | "working" | "done" | "winner" | "blocked";
@@ -47,7 +49,7 @@ const EMERALD = "#34d399";
 const AGENT_GLYPHS = ["A", "B", "C", "D", "E", "F"];
 const MAX_VISIBLE_STEPS = 7;
 
-export function WorktreeForest({ task, previewUrl }: WorktreeForestProps) {
+export function WorktreeForest({ task, previewUrl, onPlay }: WorktreeForestProps) {
   const columns = deriveColumns(task);
   const integration = getIntegrationView(task);
   const winnerIndices = columns.flatMap((column, index) => (column.isWinner ? [index] : []));
@@ -125,6 +127,7 @@ export function WorktreeForest({ task, previewUrl }: WorktreeForestProps) {
         artifactPath={integration?.artifactPath}
         selecting={selecting}
         hasRun={columns.some((column) => column.steps.length > 0)}
+        onPlay={onPlay}
       />
     </section>
   );
@@ -403,6 +406,7 @@ function DeployNode({
   artifactPath,
   selecting,
   hasRun,
+  onPlay,
 }: {
   gatePassed: boolean;
   overall?: number;
@@ -412,6 +416,7 @@ function DeployNode({
   artifactPath?: string;
   selecting: boolean;
   hasRun: boolean;
+  onPlay?: () => void;
 }) {
   const live = Boolean(deployUrl);
   return (
@@ -450,7 +455,16 @@ function DeployNode({
               gate {typeof overall === "number" ? overall.toFixed(2) : "passed"}
             </span>
           ) : null}
-          {previewUrl ? (
+          {onPlay ? (
+            <button
+              type="button"
+              onClick={onPlay}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/12 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-blue-400/50 hover:bg-blue-500/[0.1]"
+            >
+              <Play size={14} aria-hidden="true" />
+              Play the build
+            </button>
+          ) : previewUrl ? (
             <a
               className="inline-flex items-center gap-1.5 rounded-md border border-white/12 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-zinc-100 no-underline transition hover:border-blue-400/50 hover:bg-blue-500/[0.1]"
               href={previewUrl}
@@ -464,7 +478,16 @@ function DeployNode({
         </div>
       </div>
 
-      {deployUrl ? (
+      {onPlay && live ? (
+        <button
+          type="button"
+          onClick={onPlay}
+          className="mt-4 flex w-full items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/[0.08] px-4 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/[0.14]"
+        >
+          <Globe2 size={16} aria-hidden="true" />
+          <span className="truncate">Open the live build</span>
+        </button>
+      ) : deployUrl ? (
         <a
           className="mt-4 flex items-center gap-2 truncate rounded-lg border border-emerald-400/40 bg-emerald-500/[0.08] px-4 py-3 text-sm font-semibold text-emerald-200 no-underline transition hover:bg-emerald-500/[0.14]"
           href={deployUrl}

@@ -1,4 +1,4 @@
-import { FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { FormEvent, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from "react";
 import {
   Activity,
   Bot,
@@ -18,12 +18,26 @@ import {
 } from "lucide-react";
 import { ShipHealStrip } from "./components/ShipHealStrip";
 import { WorktreeForest } from "./components/WorktreeForest";
+import { runClientSimulation } from "./stream/clientSimulation";
 import type { Task, TaskUpdatedEvent, TaskVerdict } from "./shared/task";
 import { connectTaskUpdates, type StreamMode } from "./stream/connectTaskUpdates";
+
+const RocketGame = lazy(() => import("./RocketGame"));
 
 const repo = import.meta.env.VITE_FORGE_REPO || "forge-demo";
 const wsUrl = import.meta.env.VITE_FORGE_WS_URL || "ws://127.0.0.1:4317/ws";
 const apiBase = import.meta.env.VITE_FORGE_API_URL || deriveApiBase(wsUrl);
+
+// On the deployed build there is no backend to reach, so the cockpit drives the
+// whole run in the browser. Local dev (or an explicitly configured backend via
+// VITE_FORGE_WS_URL / VITE_FORGE_API_URL) still streams over the websocket.
+const hasExplicitBackend = Boolean(
+  import.meta.env.VITE_FORGE_WS_URL || import.meta.env.VITE_FORGE_API_URL,
+);
+const isLocalOrigin =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+const deployedStandalone = !hasExplicitBackend && !isLocalOrigin;
 
 function deriveApiBase(ws: string): string {
   if (!ws) return "";
@@ -50,7 +64,10 @@ export default function App() {
   const [feed, setFeed] = useState<string[]>([]);
   const [mode, setMode] = useState<StreamMode>("connecting");
   const [intent, setIntent] = useState("Build me a 3D game using three.js");
+  const [standalone, setStandalone] = useState(deployedStandalone);
+  const [showGame, setShowGame] = useState(false);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const simCleanupRef = useRef<(() => void) | null>(null);
 
   const navigate = (nextPath: string) => {
     window.history.pushState(null, "", nextPath);
@@ -86,19 +103,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // The deployed build has no backend — present as live and run client-side.
+    if (deployedStandalone) {
+      setMode("ws");
+      return;
+    }
     cleanupRef.current = connectTaskUpdates({
       wsUrl,
       onEvent: handleEvent,
       onModeChange: setMode,
+      onUnreachable: () => {
+        cleanupRef.current?.();
+        setStandalone(true);
+        setMode("ws");
+      },
     });
 
     return () => cleanupRef.current?.();
   }, []);
 
+  useEffect(() => () => simCleanupRef.current?.(), []);
+
+  const startClientSimulation = (text: string) => {
+    simCleanupRef.current?.();
+    setShipTask(null);
+    setFeed(["task accepted -> running compose"]);
+    simCleanupRef.current = runClientSimulation(text, (next) =>
+      handleEvent({ type: "task.updated", task: next }),
+    );
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = intent.trim();
     if (!trimmed) return;
+
+    if (standalone) {
+      startClientSimulation(trimmed);
+      return;
+    }
 
     try {
       const response = await fetch(`${apiBase}/api/intake`, {
@@ -111,11 +154,10 @@ export default function App() {
       setTask(data.task);
       setShipTask(null);
       setFeed([`task ${data.task.id} accepted -> running compose`]);
-    } catch (error) {
-      setFeed((current) => [
-        `intake error: ${error instanceof Error ? error.message : String(error)}`,
-        ...current,
-      ]);
+    } catch {
+      // Backend unreachable or errored — run the full compose in the browser.
+      setStandalone(true);
+      startClientSimulation(trimmed);
     }
   };
 
@@ -146,17 +188,22 @@ export default function App() {
 
   if (path.startsWith("/surfaces")) {
     return (
-      <SurfacesPage
-        feed={feed}
-        intent={intent}
-        mode={mode}
-        onIntentChange={setIntent}
-        onNavigate={navigate}
-        onSubmit={handleSubmit}
-        onSwarm={handleSwarm}
-        shipTask={shipTask ?? visibleTask}
-        task={visibleTask}
-      />
+      <>
+        <SurfacesPage
+          feed={feed}
+          intent={intent}
+          mode={mode}
+          onIntentChange={setIntent}
+          onNavigate={navigate}
+          onSubmit={handleSubmit}
+          onSwarm={handleSwarm}
+          shipTask={shipTask ?? visibleTask}
+          task={visibleTask}
+          standalone={standalone}
+          onPlay={() => setShowGame(true)}
+        />
+        {showGame ? <GameOverlay onClose={() => setShowGame(false)} /> : null}
+      </>
     );
   }
 
@@ -166,6 +213,29 @@ export default function App() {
       onNavigate={navigate}
       onRunDemo={() => navigate("/surfaces")}
     />
+  );
+}
+
+function GameOverlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-[#05070f]">
+      <Suspense
+        fallback={
+          <div className="grid h-full w-full place-items-center text-sm text-zinc-400">
+            loading the build…
+          </div>
+        }
+      >
+        <RocketGame />
+      </Suspense>
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-[60] inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-sm font-semibold text-zinc-100 backdrop-blur transition hover:bg-white/20"
+      >
+        Close
+      </button>
+    </div>
   );
 }
 
@@ -265,6 +335,8 @@ interface SurfacesPageProps {
   onSwarm: () => void;
   shipTask: Task;
   task: Task;
+  standalone: boolean;
+  onPlay: () => void;
 }
 
 function SurfacesPage({
@@ -277,10 +349,15 @@ function SurfacesPage({
   onSwarm,
   shipTask,
   task,
+  standalone,
+  onPlay,
 }: SurfacesPageProps) {
-  const previewUrl = task.integration?.passed
-    ? `${apiBase}/preview/${encodeURIComponent(task.id)}`
-    : undefined;
+  // With a backend the preview is served per-task; on the deployed build the
+  // playable build opens in-app via onPlay instead.
+  const previewUrl =
+    !standalone && task.integration?.passed
+      ? `${apiBase}/preview/${encodeURIComponent(task.id)}`
+      : undefined;
 
   return (
     <main className="cockpit relative min-h-screen">
@@ -365,7 +442,11 @@ function SurfacesPage({
         {/* main grid: forest centerpiece + control rail */}
         <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_336px]">
           <div className="grid content-start gap-5">
-            <WorktreeForest task={task} previewUrl={previewUrl} />
+            <WorktreeForest
+              task={task}
+              previewUrl={previewUrl}
+              onPlay={standalone ? onPlay : undefined}
+            />
           </div>
 
           <aside className="grid content-start gap-5">
