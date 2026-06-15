@@ -17,6 +17,9 @@
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
