@@ -34,11 +34,11 @@ export function getAgentRows(task: Task): AgentRow[] {
   const candidates = task.graph?.candidates ?? [];
   if (candidates.length > 0) {
     const selected = new Set(
-      (task.selected ?? []).map((candidate) => candidateKey(candidate)),
+      (task.selected ?? []).map((candidate: ComponentCandidate) => candidateKey(candidate)),
     );
 
     return candidates
-      .map((candidate) => {
+      .map((candidate: ComponentCandidate) => {
         const last = candidate.steps.at(-1);
         return {
           agentId: candidate.variantId,
@@ -53,7 +53,7 @@ export function getAgentRows(task: Task): AgentRow[] {
           updatedAt: last?.ts ?? task.updatedAt,
         } satisfies AgentRow;
       })
-      .sort((left, right) =>
+      .sort((left: AgentRow, right: AgentRow) =>
         `${left.componentId}/${left.label}`.localeCompare(
           `${right.componentId}/${right.label}`,
         ),

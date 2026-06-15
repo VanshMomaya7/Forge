@@ -1,4 +1,4 @@
-import type { OrchestrationMode, Task, TaskOrigin } from "../shared/task";
+import type { OrchestrationMode, Step, Task, TaskOrigin } from "../shared/task";
 
 let taskSequence = 0;
 
@@ -29,7 +29,7 @@ export function copyTask(task: Task): Task {
     ...task,
     context: { ...task.context },
     plan: task.plan ? [...task.plan] : undefined,
-    steps: task.steps.map((step) => ({
+    steps: task.steps.map((step: Step) => ({
       ...step,
       scores: step.scores ? { ...step.scores } : undefined,
     })),

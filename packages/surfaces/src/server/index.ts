@@ -8,7 +8,7 @@ import express from "express";
 import { taskFromGithubWebhook } from "../adapters/ciWebhook";
 import { forkCurrentTask } from "../adapters/swarm";
 import { startTelemetryWatcher } from "../adapters/telemetry";
-import type { OrchestrationMode, Task, TaskOrigin } from "../shared/task";
+import type { OrchestrationMode, Task, TaskOrigin, TaskUpdatedEvent } from "../shared/task";
 import { TaskEventBus } from "./eventBus";
 
 const app = express();
@@ -165,7 +165,7 @@ app.use(
 
 // Bridge: every task.updated emitted by @forge/core (decompose, candidate
 // steps, selection, integration gate, deploy) is persisted and broadcast to ws.
-subscribe((event) => upsert(event.task));
+subscribe((event: TaskUpdatedEvent) => upsert(event.task));
 
 bus.attach(server);
 
