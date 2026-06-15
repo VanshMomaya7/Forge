@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter @forge/surfaces run build",
+  "outputDirectory": "packages/surfaces/dist",
+  "installCommand": "pnpm install",
+  "framework": null
+}
