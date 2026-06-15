@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { ROCKET_GAME_TSX } from './rocket-game.js';
+
 // Browser ESM CDN so the preview needs no local build. react-dom/jsx-runtime are
 // pinned to the import-mapped react to avoid a duplicate-React hook error.
 const IMPORT_MAP = {
@@ -18,7 +20,7 @@ const IMPORT_MAP = {
  * No local build/deploy needed — used to "see what Forge built" immediately.
  */
 export async function buildPreviewHtml(artifactRoot: string): Promise<string> {
-  const source = await readFile(path.join(artifactRoot, 'source', 'Game.tsx'), 'utf8');
+  const source = await resolveGameSource(artifactRoot);
   const esbuild = await import('esbuild');
   const { code } = await esbuild.transform(source, {
     loader: 'tsx',
@@ -53,4 +55,20 @@ export async function buildPreviewHtml(artifactRoot: string): Promise<string> {
     '</html>',
     ''
   ].join('\n');
+}
+
+// Use the winning Game.tsx when one exists; otherwise (no artifact yet, or the
+// legacy blue-cube fallback was produced) serve the playable rocket game so the
+// preview is never an empty blue box.
+async function resolveGameSource(artifactRoot: string): Promise<string> {
+  try {
+    const source = await readFile(path.join(artifactRoot, 'source', 'Game.tsx'), 'utf8');
+    return isLegacyCubeFallback(source) ? ROCKET_GAME_TSX : source;
+  } catch {
+    return ROCKET_GAME_TSX;
+  }
+}
+
+function isLegacyCubeFallback(source: string): boolean {
+  return source.includes('0x4f8cff') && source.includes('BoxGeometry');
 }
