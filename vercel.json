@@ -1,7 +1,0 @@
-{
-  "buildCommand": "pnpm --filter @forge/shared run build && pnpm --filter @forge/surfaces exec vite build",
-  "outputDirectory": "packages/surfaces/dist",
-  "rootDirectory": "./",
-  "installCommand": "pnpm install",
-  "framework": null
-}
