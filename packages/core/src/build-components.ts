@@ -9,6 +9,7 @@ import type {
   ComponentSpec
 } from '@forge/shared/component';
 import type { AgentConfig } from '@forge/shared/contracts';
+import type { Learning } from '@forge/shared/learning';
 import type { ScoreResult, Step, Task, Verdict } from '@forge/shared/task';
 
 import { emitTaskUpdated } from './event-bus.js';
@@ -194,6 +195,9 @@ function candidateTaskFor(task: Task, component: ComponentSpec, candidate: Compo
 
 function componentPrompt(task: Task, component: ComponentSpec, variantId: string): string {
   const produced = component.contract.produces?.[0];
+  const learnings = Array.isArray(task.context.reusedLearnings)
+    ? (task.context.reusedLearnings as Learning[])
+    : [];
 
   return [
     'You are an autonomous coding agent. Your current working directory is a git worktree.',
@@ -203,6 +207,13 @@ function componentPrompt(task: Task, component: ComponentSpec, variantId: string
     `Goal: ${component.goal}`,
     `Interface contract: ${JSON.stringify(component.contract)}`,
     '',
+    ...(learnings.length > 0
+      ? [
+          'Known constraints from prior verified Forge runs — do not repeat these mistakes:',
+          ...learnings.map((learning) => `- ${learning.insight}`),
+          ''
+        ]
+      : []),
     produced
       ? `ACTION REQUIRED: actually CREATE the file "${produced}" in the current working ` +
         'directory by writing it to disk with your file tools (apply_patch / shell). Do NOT ' +

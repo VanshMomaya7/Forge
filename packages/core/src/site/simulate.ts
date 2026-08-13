@@ -5,6 +5,7 @@ import type { ComponentCandidate, ComponentGraph, ComponentSpec } from '@forge/s
 import type { ScoreResult, Step, Task } from '@forge/shared/task';
 
 import { emitTaskUpdated } from '../event-bus.js';
+import { harvestComponentLearnings, promoteTaskLearnings } from '../learnings.js';
 import { upsert } from '../store.js';
 import { assembleSite } from './assemble.js';
 
@@ -114,10 +115,13 @@ export async function runSimulatedSiteCompose(task: Task, graph: ComponentGraph)
   task.selected = shell ? [...winners, shell] : [...winners];
   publish(task, populated);
 
+  await harvestComponentLearnings(task, populated, task.selected);
+
   await delay(2600);
 
   const { artifactPath } = await assembleSite(task.selected, populated, task);
   task.integration = { artifactPath, gate: makeScore(0.92), passed: true };
+  await promoteTaskLearnings(task, 'site gate passed (simulated build)');
   publish(task, populated);
 
   await delay(1600);

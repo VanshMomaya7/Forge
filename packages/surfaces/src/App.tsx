@@ -16,6 +16,7 @@ import {
   TerminalSquare,
   Webhook,
 } from "lucide-react";
+import { LearningsPanel } from "./components/LearningsPanel";
 import { ShipHealStrip } from "./components/ShipHealStrip";
 import { WorktreeForest } from "./components/WorktreeForest";
 import { runClientSimulation } from "./stream/clientSimulation";
@@ -451,6 +452,8 @@ function SurfacesPage({
 
           <aside className="grid content-start gap-5">
             <ShipHealStrip task={shipTask} feed={feed} />
+
+            <LearningsPanel task={task} />
 
             <DarkPanel title="Configuration">
               <DarkField

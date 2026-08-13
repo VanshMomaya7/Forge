@@ -1,4 +1,4 @@
-import type { ComponentCandidate, Task, Verdict } from "../shared/task";
+import type { ComponentCandidate, Learning, Task, Verdict } from "../shared/task";
 
 export interface AgentRow {
   agentId: string;
@@ -61,6 +61,14 @@ export function getAgentRows(task: Task): AgentRow[] {
   }
 
   return getStepAgentRows(task);
+}
+
+// The context graph's read path surfaces on task.context.reusedLearnings
+// (set by @forge/core's decompose before planning). An empty list just means
+// this is either the first run or nothing prior overlapped with the intent.
+export function getReusedLearnings(task: Task): Learning[] {
+  const reused = task.context.reusedLearnings;
+  return Array.isArray(reused) ? (reused as Learning[]) : [];
 }
 
 export function getIntegrationView(task: Task): IntegrationView | null {

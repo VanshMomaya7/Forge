@@ -1,4 +1,4 @@
-import type { ComponentCandidate, ScoreResult, Step, Task } from "../shared/task";
+import type { ComponentCandidate, Learning, ScoreResult, Step, Task } from "../shared/task";
 
 // Drives a full game compose entirely in the browser, for the deployed build
 // where there is no backend to stream over the websocket. Mirrors the core
@@ -49,10 +49,51 @@ const GAME_PLANS: string[][] = [
 
 const SHELL_PLAN = ["reading the layout contract", "writing page.tsx", "mounting <Game /> full-screen", "done"];
 
+// The deployed build has no backend, so the context graph's store lives in
+// the tab's sessionStorage instead of @forge/core's on-disk learnings.json.
+// Same write-at-merge / read-at-decompose shape, just browser-scoped.
+const LEARNINGS_KEY = "forge:learnings";
+
+function tagsFor(intent: string): string[] {
+  return Array.from(
+    new Set(
+      intent
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]+/g, " ")
+        .split(/\s+/)
+        .filter((word) => word.length > 2),
+    ),
+  );
+}
+
+function loadStoredLearnings(): Learning[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.sessionStorage.getItem(LEARNINGS_KEY);
+    return raw ? (JSON.parse(raw) as Learning[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function appendStoredLearning(learning: Learning): void {
+  if (typeof window === "undefined") return;
+  try {
+    const next = [...loadStoredLearnings(), learning].slice(-20);
+    window.sessionStorage.setItem(LEARNINGS_KEY, JSON.stringify(next));
+  } catch {
+    /* sessionStorage unavailable (private mode, quota) — reuse just skips */
+  }
+}
+
 export function runClientSimulation(intent: string, onTask: (task: Task) => void): () => void {
   let cancelled = false;
   const now = Date.now();
   const id = `human-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const queryTags = new Set(tagsFor(intent));
+  const reused = loadStoredLearnings()
+    .filter((learning) => learning.tags.some((tag) => queryTags.has(tag)))
+    .slice(0, 3);
 
   const candidates: ComponentCandidate[] = [
     cand("game", "game:variant-1", id),
@@ -65,7 +106,7 @@ export function runClientSimulation(intent: string, onTask: (task: Task) => void
     id,
     origin: "human",
     intent: intent.trim(),
-    context: { repo: "forge", feed: [] },
+    context: { repo: "forge", feed: [], ...(reused.length > 0 ? { reusedLearnings: reused } : {}) },
     mode: "compose",
     steps: [],
     verdict: "running",
@@ -111,6 +152,9 @@ export function runClientSimulation(intent: string, onTask: (task: Task) => void
   void (async () => {
     emit();
     feed(`${gameVariants.length} worktrees spawned — Codex agents building in parallel`);
+    if (reused.length > 0) {
+      feed(`context graph: reused ${reused.length} verified learning(s) from a prior run`);
+    }
     await delay(900);
     emit();
 
@@ -144,6 +188,22 @@ export function runClientSimulation(intent: string, onTask: (task: Task) => void
       gate: score(0.92),
       passed: true,
     };
+
+    // Write path: the gate passed, so bank what the losing variant got wrong.
+    const loser = ranked.find((candidate) => !winners.includes(candidate));
+    if (loser) {
+      appendStoredLearning({
+        id: `${id}:${loser.variantId}:${Date.now().toString(36)}`,
+        insight: `game: "${loser.variantId}" scored lower (${(loser.score?.overall ?? 0).toFixed(2)} vs ${(winners[0]?.score?.overall ?? 0).toFixed(2)}) — inspect its approach before reusing it.`,
+        sourceTaskId: id,
+        sourceBranch: loser.variantId,
+        status: "verified",
+        verifiedBy: "site gate passed (simulated build)",
+        tags: tagsFor(intent),
+        createdAt: Date.now(),
+      });
+    }
+
     emit();
 
     await delay(1600);

@@ -16,3 +16,4 @@ forge-worktrees-test/
 packages/compose/.local-compose/
 .codex-generated-schemas/
 .codex-runtime/
+.forge/

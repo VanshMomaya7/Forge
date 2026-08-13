@@ -100,9 +100,17 @@ app.post("/webhook/github", (request, response) => {
     return;
   }
 
-  // Persist the regression task but do not auto-spawn real agents on CI noise;
-  // a human promotes it from the cockpit via /api/intake when ready.
+  // taskFromGithubWebhook stamps context.repo with the GitHub "owner/repo"
+  // name (for display); orchestration needs the actual filesystem repo it
+  // runs worktrees against, so keep the GitHub name and correct the path.
+  task.context.githubRepo = task.context.repo;
+  task.context.repo = repoRoot;
+
+  // Self-healing loop: a failed CI check re-enters orchestration on its own —
+  // no human promotes it. USE_REAL_CODEX / FORGE_DEPLOY still gate whether
+  // that means real agent calls or the safe simulated build.
   upsert(task);
+  void runComposeInBackground(task);
   response.status(202).json({ task });
 });
 
@@ -124,7 +132,12 @@ app.post("/api/watch", (request, response) => {
       errorRate: Number(process.env.FORGE_TELEMETRY_ERROR_RATE ?? 0.02),
     },
     onTelemetry: upsert,
-    onRegressionTask: upsert,
+    onRegressionTask: (regressionTask) => {
+      // Same closed loop: a telemetry breach dispatches straight back into
+      // orchestration, unattended.
+      upsert(regressionTask);
+      void runComposeInBackground(regressionTask);
+    },
   });
 
   request.on("close", stop);

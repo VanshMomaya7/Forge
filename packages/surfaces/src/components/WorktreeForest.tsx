@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   CircleDashed,
   CircleDot,
@@ -11,8 +12,9 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
-import type { ComponentCandidate, Task, Verdict } from "../shared/task";
+import type { ComponentCandidate, InterfaceContract, Task, Verdict } from "../shared/task";
 import { formatScore, getIntegrationView } from "../task/viewModel";
+import { AgentDrilldown } from "./AgentDrilldown";
 
 interface WorktreeForestProps {
   task: Task;
@@ -23,19 +25,25 @@ interface WorktreeForestProps {
 
 type ColumnStatus = "spawning" | "working" | "done" | "winner" | "blocked";
 
-interface ForestStep {
+export interface ForestStep {
   id: string;
   action: string;
   ts: number;
   verdict?: Verdict;
   overall?: number;
+  planAdherence?: number;
+  toolCorrectness?: number;
+  taskCompletion?: number;
+  notes?: string;
 }
 
-interface ForestColumn {
+export interface ForestColumn {
   key: string;
   label: string;
   componentId: string;
   worktree?: string;
+  goal?: string;
+  contract?: InterfaceContract;
   steps: ForestStep[];
   overall?: number;
   verdict?: Verdict;
@@ -51,6 +59,8 @@ const MAX_VISIBLE_STEPS = 7;
 
 export function WorktreeForest({ task, previewUrl, onPlay }: WorktreeForestProps) {
   const columns = deriveColumns(task);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selectedColumn = columns.find((column) => column.key === selectedKey) ?? null;
   const integration = getIntegrationView(task);
   const winnerIndices = columns.flatMap((column, index) => (column.isWinner ? [index] : []));
   const anyWorking = columns.some(
@@ -104,7 +114,12 @@ export function WorktreeForest({ task, previewUrl, onPlay }: WorktreeForestProps
         style={{ gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(0, 1fr))` }}
       >
         {columns.map((column, index) => (
-          <TreeColumn key={column.key} column={column} index={index} />
+          <TreeColumn
+            key={column.key}
+            column={column}
+            index={index}
+            onSelect={column.steps.length > 0 ? () => setSelectedKey(column.key) : undefined}
+          />
         ))}
       </div>
 
@@ -129,11 +144,23 @@ export function WorktreeForest({ task, previewUrl, onPlay }: WorktreeForestProps
         hasRun={columns.some((column) => column.steps.length > 0)}
         onPlay={onPlay}
       />
+
+      {selectedColumn ? (
+        <AgentDrilldown column={selectedColumn} onClose={() => setSelectedKey(null)} />
+      ) : null}
     </section>
   );
 }
 
-function TreeColumn({ column, index }: { column: ForestColumn; index: number }) {
+function TreeColumn({
+  column,
+  index,
+  onSelect,
+}: {
+  column: ForestColumn;
+  index: number;
+  onSelect?: () => void;
+}) {
   const glyph = AGENT_GLYPHS[index] ?? String(index + 1);
   const visible = column.steps.slice(-MAX_VISIBLE_STEPS);
   const hidden = column.steps.length - visible.length;
@@ -143,8 +170,21 @@ function TreeColumn({ column, index }: { column: ForestColumn; index: number }) 
     <article
       className={`group glass glass-hover relative isolate flex flex-col overflow-hidden rounded-xl p-4 sm:p-5 ${
         column.isWinner ? "ring-1 ring-emerald-400/50" : ""
-      }`}
+      } ${onSelect ? "cursor-pointer" : ""}`}
       style={{ animation: "forgeRise .5s ease-out both", animationDelay: `${index * 80}ms` }}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect}
+      onKeyDown={
+        onSelect
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
     >
       {/* hover sheen — indigo→cyan, painted behind the content */}
       <div className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-[radial-gradient(130%_90%_at_50%_-20%,rgba(99,102,241,0.18),rgba(56,189,248,0.06)_45%,transparent_70%)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -576,6 +616,7 @@ function deriveColumns(task: Task): ForestColumn[] {
   }
   const sorted = [...groups.values()].sort((a, b) => b.length - a.length);
   const racers = sorted[0] && sorted[0].length > 1 ? sorted[0] : candidates;
+  const specs = new Map((task.graph?.components ?? []).map((spec) => [spec.id, spec]));
 
   return racers
     .slice()
@@ -585,17 +626,24 @@ function deriveColumns(task: Task): ForestColumn[] {
       const last = candidate.steps.at(-1);
       const overall = candidate.score?.overall;
       const status = columnStatus(candidate, isWinner);
+      const spec = specs.get(candidate.componentId);
       return {
         key: candidateKey(candidate),
         label: AGENT_GLYPHS[index] ?? String(index + 1),
         componentId: candidate.componentId,
         worktree: worktreeLeaf(candidate.worktree),
+        goal: spec?.goal,
+        contract: spec?.contract,
         steps: candidate.steps.map((step) => ({
           id: step.id,
           action: step.action,
           ts: step.ts,
           verdict: step.verdict,
           overall: step.scores?.overall,
+          planAdherence: step.scores?.planAdherence,
+          toolCorrectness: step.scores?.toolCorrectness,
+          taskCompletion: step.scores?.taskCompletion,
+          notes: step.scores?.notes,
         })),
         overall,
         verdict: scoreVerdict(overall),

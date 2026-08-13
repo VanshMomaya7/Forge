@@ -2,6 +2,8 @@ import type { ComponentGraph, ComponentSpec, InterfaceContract } from '@forge/sh
 import type { Task } from '@forge/shared/task';
 import { z } from 'zod';
 
+import { retrieveVerifiedLearnings } from './learnings.js';
+
 const DECOMPOSE_MODEL = 'gpt-4.1-mini';
 const DECOMPOSE_TIMEOUT_MS = 8_000;
 
@@ -49,6 +51,13 @@ const ComponentGraphSchema = z
 type ComponentGraphInput = z.infer<typeof ComponentGraphSchema>;
 
 export async function decompose(task: Task): Promise<ComponentGraph> {
+  // Read path: seed this run with priors earned by prior verified runs before
+  // planning, so a related later task starts smarter than the first.
+  const learnings = await retrieveVerifiedLearnings(task);
+  if (learnings.length > 0) {
+    task.context.reusedLearnings = learnings;
+  }
+
   const modelGraph = await decomposeWithModel(task);
 
   if (modelGraph) {

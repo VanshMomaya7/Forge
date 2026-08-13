@@ -18,6 +18,10 @@
     "./component": {
       "types": "./dist/component.d.ts",
       "import": "./dist/component.js"
+    },
+    "./learning": {
+      "types": "./dist/learning.d.ts",
+      "import": "./dist/learning.js"
     }
   },
   "types": "./dist/task.d.ts",

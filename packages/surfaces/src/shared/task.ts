@@ -17,6 +17,7 @@ export type {
   InterfaceContract,
   OrchestrationMode,
 } from "@forge/shared/component";
+export type { Learning, LearningStatus } from "@forge/shared/learning";
 
 import type { Task } from "@forge/shared/task";
 

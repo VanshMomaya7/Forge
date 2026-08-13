@@ -5,6 +5,7 @@ import { integrate, integrationGate, selectBest } from '@forge/compose';
 import { buildComponents } from './build-components.js';
 import { decompose } from './decompose.js';
 import { emitTaskUpdated } from './event-bus.js';
+import { harvestComponentLearnings, promoteTaskLearnings } from './learnings.js';
 import { forkAndRun } from './orchestrator.js';
 import {
   assembleSite,
@@ -67,6 +68,11 @@ async function runComposeTask(task: Task): Promise<Task> {
     task.selected = selected;
     publish(task);
 
+    // Merge boundary: compact what losing variants surfaced before their work
+    // is discarded. Nothing is durable yet — only a passed gate below verifies
+    // and promotes these into the context graph.
+    await harvestComponentLearnings(task, task.graph, selected);
+
     if (site) {
       return await runSiteCompose(task, selected, task.graph);
     }
@@ -95,6 +101,11 @@ async function runStaticCompose(
     passed: gated.passed
   };
   task.verdict = gated.passed ? 'shipped' : 'blocked';
+
+  if (gated.passed) {
+    await promoteTaskLearnings(task, `integration gate passed (overall ${gated.gate.overall})`);
+  }
+
   publish(task);
 
   return task;
@@ -117,6 +128,8 @@ async function runSiteCompose(
     publish(task);
     return task;
   }
+
+  await promoteTaskLearnings(task, `site gate passed (overall ${gated.gate.overall})`);
 
   if (!shouldDeploy()) {
     task.verdict = 'won';
