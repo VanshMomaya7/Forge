@@ -113,9 +113,62 @@ forge/
 │
 ├── packages/evals/             # ⚖️ rubric generation, scoring, gating (pass/block/redirect)
 │
+├── packages/audio_input/       # 🎙️ audio (wav/mp3) → text via OpenAI transcription
+├── packages/doc_ingest/        # 📄 PDF/DOCX/TXT → text + image descriptions via OpenAI
+│
 └── packages/surfaces/          # 🖥️ the cockpit
     ├── src/server/index.ts     #   Express + WebSocket: /api/intake → core.runTask, /preview/:id
     └── src/                     #   React 19 + Vite UI: live agents, gate, preview, deploy link
+```
+
+### Module graph
+
+```mermaid
+flowchart TD
+    subgraph UI["packages/surfaces (cockpit)"]
+        VITE["React 19 + Vite UI<br/>App, SwarmSection, WorktreeForest,<br/>AgentDrilldown, LearningsPanel"]
+        SRV["server/index.ts<br/>Express + WebSocket :4317"]
+    end
+
+    subgraph CORE["packages/core (engine)"]
+        ROUTER["router.ts · runTask"]
+        DEC["decompose.ts"]
+        BUILD["build-components.ts"]
+        RUNNER["codex-exec.ts / codex-app-server.ts<br/>(or simulate.ts stub)"]
+        ORCH["orchestrator.ts<br/>race: forkAndRun + promote"]
+        SITE["site/ assemble → gate → deploy<br/>+ preview"]
+        LEARN["learnings.ts<br/>context graph"]
+        BUS["event-bus.ts + store.ts"]
+    end
+
+    COMPOSE["packages/compose<br/>selectBest · integrate · integrationGate"]
+    EVALS["packages/evals<br/>rubric · score · gate · model-judge"]
+    SHARED["shared/<br/>Task · ComponentGraph · contracts · learning"]
+
+    WT[("git worktrees<br/>forge-worktrees/")]
+    CODEX[["Codex CLI"]]
+    SITES[["Codex Sites<br/>live URL"]]
+    LJSON[(".forge/learnings.json")]
+
+    VITE -- "POST /api/intake" --> SRV
+    SRV -- "task.updated over /ws" --> VITE
+    SRV --> ROUTER
+
+    ROUTER -- compose --> DEC --> BUILD
+    ROUTER -- race --> ORCH
+    BUILD --> RUNNER --> CODEX
+    RUNNER --> WT
+    BUILD -- score candidates --> EVALS
+    ORCH --> EVALS
+    BUILD --> COMPOSE
+    COMPOSE -- winners --> SITE
+    SITE --> SITES
+    ROUTER --> LEARN --> LJSON
+    ROUTER --> BUS --> SRV
+
+    CORE -.-> SHARED
+    COMPOSE -.-> SHARED
+    EVALS -.-> SHARED
 ```
 
 ### The compose pipeline (the heart of Forge)
@@ -131,6 +184,31 @@ runTask(task)                       // mode: "compose"
 ```
 
 Every arrow emits a `task.updated` event → streamed to the cockpit over `/ws`.
+
+---
+
+## 🎤 Input options
+
+Forge can take an intent from three kinds of input:
+
+- **Text** — the cockpit intent box → `POST /api/intake` (the current path).
+- **Audio** — `@forge/audio-input` → `transcribeAudio(path): Promise<string>`. Accepts `.wav` / `.mp3` up to 25 MB; needs `OPENAI_API_KEY`. Override the model with `FORGE_STT_MODEL`.
+- **Documents** — `@forge/doc-ingest` → `ingestDocument(path): Promise<{ text, images: { source, description }[] }>`. Handles PDF (including scanned pages, which the model reads), DOCX (text plus descriptions of embedded images) and TXT; needs `OPENAI_API_KEY`.
+
+```ts
+import { transcribeAudio } from '@forge/audio-input';
+
+const intent = await transcribeAudio('./brief.mp3');
+```
+
+```ts
+import { ingestDocument } from '@forge/doc-ingest';
+
+const { text, images } = await ingestDocument('./spec.pdf');
+const intent = [text, ...images.map((i) => `[${i.source}] ${i.description}`)].join('\n\n');
+```
+
+> **Note:** audio and documents are standalone modules and are **not yet wired into `/api/intake`**. Transcribe or ingest first, then submit the resulting text as an intent.
 
 ---
 
@@ -190,6 +268,8 @@ Open **http://127.0.0.1:5173/surfaces**, type a prompt, hit send, and watch the 
 | `FORGE_TASK_MODE` | `compose` | `compose` (Mixture-of-Agents) or `race` (fork & promote) |
 | `VITE_FORGE_WS_URL` | `ws://127.0.0.1:4317/ws` | cockpit → live task bus |
 | `VITE_FORGE_API_URL` | derived from WS URL | cockpit → REST API |
+| `FORGE_STT_MODEL` | `gpt-4o-mini-transcribe` | OpenAI transcription model used by `@forge/audio-input` |
+| `FORGE_DOC_MODEL` | `gpt-4.1-mini` | OpenAI model used by `@forge/doc-ingest` (scanned PDF pages, image descriptions) |
 
 ---
 

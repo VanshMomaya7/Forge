@@ -4,7 +4,9 @@
     { "path": "./shared" },
     { "path": "./packages/core" },
     { "path": "./packages/evals" },
-    { "path": "./packages/compose" }
+    { "path": "./packages/compose" },
+    { "path": "./packages/audio_input" },
+    { "path": "./packages/doc_ingest" }
   ],
   "compilerOptions": {
     "target": "ES2022",
