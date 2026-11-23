@@ -11,7 +11,9 @@
     "server": "tsx src/server/index.ts"
   },
   "dependencies": {
+    "@forge/audio-input": "workspace:*",
     "@forge/core": "workspace:*",
+    "@forge/doc-ingest": "workspace:*",
     "@forge/shared": "workspace:*",
     "express": "^4.21.2",
     "lucide-react": "^0.468.0",

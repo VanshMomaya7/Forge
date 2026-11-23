@@ -4,7 +4,10 @@ import {
   Bot,
   Check,
   ChevronUp,
+  FileText,
   GitFork,
+  Loader2,
+  Mic,
   Globe2,
   LayoutDashboard,
   Play,
@@ -67,6 +70,7 @@ export default function App() {
   const [intent, setIntent] = useState("Build me a 3D game using three.js");
   const [standalone, setStandalone] = useState(deployedStandalone);
   const [showGame, setShowGame] = useState(false);
+  const [extract, setExtract] = useState<ExtractStatus>({ state: "idle", message: "" });
   const cleanupRef = useRef<(() => void) | null>(null);
   const simCleanupRef = useRef<(() => void) | null>(null);
 
@@ -162,6 +166,34 @@ export default function App() {
     }
   };
 
+  // Audio / document → text, dropped into the intent box for review before
+  // "Forge it". Needs the backend (the modules call OpenAI server-side).
+  const handleExtract = async (kind: ExtractKind, file: File) => {
+    if (standalone) {
+      setExtract({ state: "error", message: "Audio and document input need the local backend (port 4317)." });
+      return;
+    }
+    setExtract({ state: "working", message: `${kind === "audio" ? "Transcribing" : "Reading"} ${file.name}…` });
+    try {
+      const response = await fetch(`${apiBase}/api/extract/${kind}`, {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream", "x-file-name": file.name },
+        body: file,
+      });
+      const data = (await response.json()) as ExtractResponse;
+      if (!response.ok || data.error) throw new Error(data.error ?? `extract failed: ${response.status}`);
+
+      const imageNotes = (data.images ?? []).map((image) => `[${image.source}] ${image.description}`);
+      const text = [data.text?.trim() ?? "", ...imageNotes].filter(Boolean).join("\n");
+      if (!text) throw new Error(`No text found in ${file.name}.`);
+      setIntent(text);
+      const imageCount = imageNotes.length ? ` + ${imageNotes.length} image description(s)` : "";
+      setExtract({ state: "done", message: `Filled from ${file.name}${imageCount}. Review it, then Forge it.` });
+    } catch (error) {
+      setExtract({ state: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   const handleSwarm = async () => {
     if (!task) return;
     try {
@@ -198,6 +230,8 @@ export default function App() {
           onNavigate={navigate}
           onSubmit={handleSubmit}
           onSwarm={handleSwarm}
+          onExtract={handleExtract}
+          extract={extract}
           shipTask={shipTask ?? visibleTask}
           task={visibleTask}
           standalone={standalone}
@@ -334,6 +368,8 @@ interface SurfacesPageProps {
   onNavigate: (path: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSwarm: () => void;
+  onExtract: (kind: ExtractKind, file: File) => void;
+  extract: ExtractStatus;
   shipTask: Task;
   task: Task;
   standalone: boolean;
@@ -348,6 +384,8 @@ function SurfacesPage({
   onNavigate,
   onSubmit,
   onSwarm,
+  onExtract,
+  extract,
   shipTask,
   task,
   standalone,
@@ -438,6 +476,42 @@ function SurfacesPage({
               <GitFork size={17} aria-hidden="true" />
             </button>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+            <span className="text-xs text-zinc-500">Or start from</span>
+            <UploadButton
+              accept=".wav,.mp3,audio/wav,audio/mpeg"
+              disabled={extract.state === "working"}
+              icon={<Mic size={14} aria-hidden="true" />}
+              label="Audio"
+              hint=".wav / .mp3, up to 25 MB"
+              onFile={(file) => onExtract("audio", file)}
+            />
+            <UploadButton
+              accept=".pdf,.docx,.txt"
+              disabled={extract.state === "working"}
+              icon={<FileText size={14} aria-hidden="true" />}
+              label="Document"
+              hint=".pdf / .docx / .txt"
+              onFile={(file) => onExtract("document", file)}
+            />
+            {extract.state !== "idle" ? (
+              <span
+                role="status"
+                className={`inline-flex min-w-0 items-center gap-1.5 text-xs [overflow-wrap:anywhere] ${
+                  extract.state === "error"
+                    ? "text-rose-400"
+                    : extract.state === "done"
+                      ? "text-emerald-400"
+                      : "text-zinc-400"
+                }`}
+              >
+                {extract.state === "working" ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                ) : null}
+                {extract.message}
+              </span>
+            ) : null}
+          </div>
         </form>
 
         {/* main grid: forest centerpiece + control rail */}
@@ -483,6 +557,63 @@ function SurfacesPage({
         </div>
       </section>
     </main>
+  );
+}
+
+type ExtractKind = "audio" | "document";
+
+interface ExtractStatus {
+  state: "idle" | "working" | "done" | "error";
+  message: string;
+}
+
+interface ExtractResponse {
+  text?: string;
+  images?: { source: string; description: string }[];
+  error?: string;
+}
+
+function UploadButton({
+  accept,
+  disabled,
+  icon,
+  label,
+  hint,
+  onFile,
+}: {
+  accept: string;
+  disabled: boolean;
+  icon: ReactNode;
+  label: string;
+  hint: string;
+  onFile: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        title={hint}
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs font-semibold text-zinc-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {icon}
+        {label}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        aria-label={`${label} file`}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) onFile(file);
+        }}
+      />
+    </>
   );
 }
 

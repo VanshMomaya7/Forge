@@ -1,4 +1,5 @@
-import { createServer } from "node:http";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { createServer, type IncomingMessage } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,7 @@ import { forkCurrentTask } from "../adapters/swarm";
 import { startTelemetryWatcher } from "../adapters/telemetry";
 import type { OrchestrationMode, Task, TaskOrigin, TaskUpdatedEvent } from "../shared/task";
 import { TaskEventBus } from "./eventBus";
+import { extractRouter } from "./extract";
 
 const app = express();
 const server = createServer(app);
@@ -22,13 +24,35 @@ const repoRoot =
   process.env.FORGE_REPO_ROOT ??
   path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const port = Number(process.env.FORGE_SURFACES_PORT ?? 4317);
-const defaultMode = (process.env.FORGE_TASK_MODE as OrchestrationMode) ?? "compose";
+const defaultMode = parseMode(process.env.FORGE_TASK_MODE) ?? "compose";
 
-// The vite cockpit runs on a different port, so allow cross-origin API calls.
+// Hard cap on agents a single swarm request may fork.
+const MAX_SWARM_SIZE = 5;
+const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
+const watchers = new Map<string, () => void>();
+
+// The vite cockpit runs on a different port, so allow cross-origin API calls,
+// but only from known cockpit origins — any other page in the browser must not
+// be able to start real agent runs or deploys.
+const allowedOrigins = new Set(
+  (process.env.FORGE_ALLOWED_ORIGINS ?? "http://127.0.0.1:5173,http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
 app.use((request, response, next) => {
-  response.header("Access-Control-Allow-Origin", request.headers.origin ?? "*");
-  response.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  response.header("Access-Control-Allow-Headers", "Content-Type");
+  const origin = request.headers.origin;
+  if (origin && !allowedOrigins.has(origin)) {
+    response.status(403).json({ error: "origin not allowed" });
+    return;
+  }
+  if (origin) {
+    response.header("Access-Control-Allow-Origin", origin);
+    response.header("Vary", "Origin");
+  }
+  response.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  response.header("Access-Control-Allow-Headers", "Content-Type, X-File-Name");
   if (request.method === "OPTIONS") {
     response.sendStatus(204);
     return;
@@ -36,7 +60,18 @@ app.use((request, response, next) => {
   next();
 });
 
-app.use(express.json({ limit: "1mb" }));
+// Raw-body upload routes go before the JSON parser.
+app.use(extractRouter);
+
+app.use(
+  express.json({
+    limit: "1mb",
+    // Keep the raw bytes so the GitHub webhook signature can be verified.
+    verify: (request, _response, buffer) => {
+      (request as IncomingMessage & { rawBody?: Buffer }).rawBody = buffer;
+    },
+  }),
+);
 
 app.get("/healthz", (_request, response) => {
   response.json({ ok: true, repoRoot, mode: defaultMode });
@@ -64,9 +99,16 @@ app.post("/api/intake", (request, response) => {
     return;
   }
 
+  const requestedMode = request.body?.mode;
+  const mode = requestedMode === undefined ? defaultMode : parseMode(requestedMode);
+  if (!mode) {
+    response.status(400).json({ error: "mode must be 'race' or 'compose'" });
+    return;
+  }
+
   const task = createComposeTask(intent, {
     origin: "human",
-    mode: String(request.body?.mode ?? defaultMode) as OrchestrationMode,
+    mode,
     variants: request.body?.variants,
     maxSteps: request.body?.maxSteps,
   });
@@ -85,7 +127,7 @@ app.post("/api/tasks/:id/swarm", async (request, response, next) => {
     }
 
     const children = await forkCurrentTask(task, {
-      n: Number(request.body?.n ?? 3),
+      n: Math.min(toPositiveInt(request.body?.n) ?? 3, MAX_SWARM_SIZE),
     });
     response.status(202).json({ children });
   } catch (error) {
@@ -94,6 +136,16 @@ app.post("/api/tasks/:id/swarm", async (request, response, next) => {
 });
 
 app.post("/webhook/github", (request, response) => {
+  if (!webhookSecret) {
+    response.status(503).json({ error: "GITHUB_WEBHOOK_SECRET is not configured" });
+    return;
+  }
+  const rawBody = (request as IncomingMessage & { rawBody?: Buffer }).rawBody;
+  if (!isValidGithubSignature(rawBody, request.header("x-hub-signature-256"), webhookSecret)) {
+    response.status(401).json({ error: "invalid webhook signature" });
+    return;
+  }
+
   const task = taskFromGithubWebhook(request.body, repoRoot) as Task | null;
   if (!task) {
     response.status(202).json({ ignored: true });
@@ -123,6 +175,9 @@ app.post("/api/watch", (request, response) => {
     return;
   }
 
+  // One watcher per task; re-watching replaces the old one.
+  watchers.get(task.id)?.();
+
   const stop = startTelemetryWatcher({
     task,
     url,
@@ -140,8 +195,21 @@ app.post("/api/watch", (request, response) => {
     },
   });
 
-  request.on("close", stop);
+  // The watcher outlives this request (whose "close" fires as soon as the 202
+  // is sent); it runs until DELETE /api/watch/:taskId stops it.
+  watchers.set(task.id, stop);
   response.status(202).json({ watching: true });
+});
+
+app.delete("/api/watch/:taskId", (request, response) => {
+  const stop = watchers.get(request.params.taskId);
+  if (!stop) {
+    response.status(404).json({ error: "no watcher for task" });
+    return;
+  }
+  stop();
+  watchers.delete(request.params.taskId);
+  response.json({ watching: false });
 });
 
 // Playable preview of the winning Game.tsx for a task, served straight from the
@@ -230,15 +298,36 @@ async function runComposeInBackground(task: Task): Promise<void> {
     const final = await runTask(task);
     upsert(final);
   } catch (error) {
-    task.verdict = "blocked";
-    task.context = {
-      ...task.context,
-      error: error instanceof Error ? error.message : String(error),
-    };
-    task.updatedAt = Date.now();
-    upsert(task);
+    // Build on the latest state core emitted, not the stale submitted object,
+    // so steps recorded before the failure are kept.
+    const latest = tasks.get(task.id) ?? task;
+    upsert({
+      ...latest,
+      verdict: "blocked",
+      context: {
+        ...latest.context,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      updatedAt: Date.now(),
+    });
     console.error(`runTask failed for ${task.id}:`, error);
   }
+}
+
+function parseMode(value: unknown): OrchestrationMode | undefined {
+  return value === "race" || value === "compose" ? value : undefined;
+}
+
+function isValidGithubSignature(
+  rawBody: Buffer | undefined,
+  signature: string | undefined,
+  secret: string,
+): boolean {
+  if (!rawBody || !signature) return false;
+  const expected = `sha256=${createHmac("sha256", secret).update(rawBody).digest("hex")}`;
+  const given = Buffer.from(signature);
+  const wanted = Buffer.from(expected);
+  return given.length === wanted.length && timingSafeEqual(given, wanted);
 }
 
 function sanitizeId(value: string): string {
