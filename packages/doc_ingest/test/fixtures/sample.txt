@@ -1,0 +1,2 @@
+Forge sample document.
+Second line with unicode: café ✓

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { extname } from 'node:path';
 
 import { resolveClient, resolveModel } from './client.js';
@@ -26,6 +26,14 @@ export async function ingestDocument(
   opts: IngestOptions = {}
 ): Promise<IngestResult> {
   const ext = extname(filePath).toLowerCase();
+
+  // Fail fast on empty files so we never spend an API call on them.
+  if ((SUPPORTED_EXTENSIONS as readonly string[]).includes(ext)) {
+    const { size } = await stat(filePath);
+    if (size === 0) {
+      throw new Error(`doc_ingest: "${filePath}" is empty (0 bytes); nothing to ingest`);
+    }
+  }
 
   switch (ext) {
     case '.txt': {

@@ -84,6 +84,9 @@ export async function transcribeAudio(filePath: string, opts: TranscribeOptions 
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(`transcribeAudio: cannot read audio file "${filePath}": ${reason}`);
   }
+  if (size === 0) {
+    throw new Error(`transcribeAudio: "${filePath}" is empty (0 bytes); nothing to transcribe`);
+  }
   if (size > MAX_AUDIO_BYTES) {
     throw new Error(
       `transcribeAudio: "${filePath}" is ${size} bytes, over the 25 MB transcription limit (${MAX_AUDIO_BYTES} bytes)`,
