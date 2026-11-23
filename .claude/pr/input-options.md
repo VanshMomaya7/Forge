@@ -1,6 +1,6 @@
 ## Summary
 
-Adds two new ways to feed Forge an intent besides typing it, and hardens the cockpit backend.
+Adds two new ways to feed Forge an intent besides typing it (audio and documents, usable from the cockpit), and hardens the cockpit backend.
 
 - **`@forge/audio-input`** (`packages/audio_input`): `transcribeAudio(path)` turns a `.wav`/`.mp3` file (≤ 25 MB) into text with OpenAI's hosted transcription (`gpt-4o-mini-transcribe`, override with `FORGE_STT_MODEL`).
 - **`@forge/doc-ingest`** (`packages/doc_ingest`): `ingestDocument(path)` returns `{ text, images }` for:
@@ -10,7 +10,7 @@ Adds two new ways to feed Forge an intent besides typing it, and hardens the coc
 
   The model defaults to `gpt-4.1-mini`; override with `FORGE_DOC_MODEL`.
 - Both modules reject empty files, unsupported formats and oversized files **before** making any API call.
-- Both are standalone for now; they are **not yet wired into `/api/intake`**.
+- **Cockpit UI:** the intake bar now has **Audio** and **Document** buttons. The file is uploaded to `POST /api/extract/audio` or `POST /api/extract/document`. The extracted text, plus any image descriptions, fills the intent box so it can be reviewed before **Forge it**. Errors and progress show inline. Temp uploads are always deleted.
 
 ### Surfaces server hardening (`packages/surfaces/src/server/index.ts`)
 - **Swarm size:** `/api/tasks/:id/swarm` caps `n` at 5 and rejects non-numeric values.
@@ -29,6 +29,7 @@ Adds two new ways to feed Forge an intent besides typing it, and hardens the coc
 - [x] `pnpm test`: 15 files, 59 tests pass. New tests use fixture files in `test/fixtures/` and mock every OpenAI call, so they need no network.
 - [x] `pnpm lint` is clean for all changed packages. The 4 existing `any` errors in `packages/surfaces/src/RocketGame.tsx` are unchanged and outside this PR.
 - [x] Ran the server and checked by hand: a foreign origin gets `403`, a bad `mode` gets `400`, the webhook without a secret gets `503`.
+- [x] Extract endpoints checked by hand: TXT returns its text; an empty WAV, an `.ogg` file and a PDF without a key each return a clear error; no temp files are left behind. The UI build (`vite build`) passes.
 - [ ] Not yet run against the real OpenAI API with a live key.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
