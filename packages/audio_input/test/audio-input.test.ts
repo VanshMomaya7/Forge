@@ -51,6 +51,16 @@ describe('audio_input fixtures', () => {
     expect(client.create).not.toHaveBeenCalled();
   });
 
+  it('prefers an explicit model option over FORGE_STT_MODEL', async () => {
+    vi.stubEnv('FORGE_STT_MODEL', 'env-model');
+    const client = mockClient('ok');
+
+    await transcribeAudio(fixture('sample.wav'), { client, model: 'explicit-model' });
+
+    expect(client.create.mock.calls[0]?.[0]).toMatchObject({ model: 'explicit-model' });
+    vi.unstubAllEnvs();
+  });
+
   it('surfaces a transcription failure as a rejected promise, not a crash', async () => {
     const client = mockClient(new Error('429 Rate limit reached'));
 

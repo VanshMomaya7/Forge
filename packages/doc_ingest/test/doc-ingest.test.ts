@@ -1,9 +1,13 @@
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import JSZip from 'jszip';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ingestDocument, type ResponsesClient } from '../src/index.js';
+import { MAX_PDF_BYTES, ingestDocument, type ResponsesClient } from '../src/index.js';
 
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
@@ -58,6 +62,40 @@ describe('doc_ingest fixtures', () => {
 
     expect(result.text).toBe('Quarterly chart');
     expect(result.images).toEqual([{ source: 'page 1', description: 'A blue bar chart.' }]);
+  });
+
+  it('describes DOCX images whose file extension is upper-case', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'doc-ingest-'));
+    try {
+      const zip = await JSZip.loadAsync(await readFile(fixture('sample.docx')));
+      const png = await zip.file('word/media/image1.png')?.async('nodebuffer');
+      zip.remove('word/media/image1.png');
+      zip.file('word/media/image1.PNG', png ?? Buffer.alloc(0));
+      const file = join(dir, 'upper.docx');
+      await writeFile(file, await zip.generateAsync({ type: 'nodebuffer' }));
+      const client = mockClient('A single red pixel.');
+
+      const result = await ingestDocument(file, { client });
+
+      expect(result.images).toEqual([{ source: 'image1.PNG', description: 'A single red pixel.' }]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a PDF over the PDF size limit without calling the API', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'doc-ingest-'));
+    try {
+      const file = join(dir, 'huge.pdf');
+      await writeFile(file, '%PDF-1.4\n');
+      await truncate(file, MAX_PDF_BYTES + 1);
+      const client = mockClient('{"text":"","images":[]}');
+
+      await expect(ingestDocument(file, { client })).rejects.toThrow(/exceeds the/);
+      expect(client.create).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('rejects an empty TXT file with a clear error', async () => {

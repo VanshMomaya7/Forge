@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import { parseIngestOutput } from './parse.js';
-import { MAX_DOCX_BYTES, MAX_PDF_BYTES, type IngestResult, type ResponsesClient } from './types.js';
+import { MAX_PDF_BYTES, type IngestResult, type ResponsesClient } from './types.js';
 
 const PDF_PROMPT = [
   'Extract the full content of the attached PDF.',
@@ -20,7 +20,7 @@ export async function ingestPdf(
   model: string
 ): Promise<IngestResult> {
   const bytes = await readFile(filePath);
-  if (bytes.byteLength > MAX_DOCX_BYTES) {
+  if (bytes.byteLength > MAX_PDF_BYTES) {
     throw new Error(
       `doc_ingest: PDF is ${bytes.byteLength} bytes, exceeds the ${MAX_PDF_BYTES}-byte limit`
     );

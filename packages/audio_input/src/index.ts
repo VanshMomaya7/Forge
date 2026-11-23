@@ -93,7 +93,7 @@ export async function transcribeAudio(filePath: string, opts: TranscribeOptions 
     );
   }
 
-  const model = process.env.FORGE_STT_MODEL ?? opts.model ?? DEFAULT_STT_MODEL;
+  const model = opts.model ?? process.env.FORGE_STT_MODEL ?? DEFAULT_STT_MODEL;
   const client = opts.client ?? (await createOpenAIClient());
 
   const result = await client.audio.transcriptions.create({

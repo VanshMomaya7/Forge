@@ -45,7 +45,7 @@ export async function ingestDocx(
 
   const images: ExtractedImage[] = [];
   for (const name of mediaNames) {
-    const mime = IMAGE_MIME[posix.extname(name)];
+    const mime = IMAGE_MIME[posix.extname(name).toLowerCase()];
     const entry = zip.file(name);
     if (!mime || !entry) continue;
 
