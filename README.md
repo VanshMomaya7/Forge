@@ -209,6 +209,8 @@ const intent = [text, ...images.map((i) => `[${i.source}] ${i.description}`)].jo
 ```
 
 > **Note:** audio and documents are standalone modules and are **not yet wired into `/api/intake`**. Transcribe or ingest first, then submit the resulting text as an intent.
+>
+> **In the cockpit:** the intake bar has **Audio** and **Document** buttons. They upload the file to `POST /api/extract/audio` or `POST /api/extract/document` on the backend, and the extracted text (plus any image descriptions) fills the intent box for you to review before hitting **Forge it**. Needs the local backend and `OPENAI_API_KEY` (TXT works without a key).
 
 ---
 

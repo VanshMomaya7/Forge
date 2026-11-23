@@ -111,9 +111,15 @@ importers:
 
   packages/surfaces:
     dependencies:
+      '@forge/audio-input':
+        specifier: workspace:*
+        version: link:../audio_input
       '@forge/core':
         specifier: workspace:*
         version: link:../core
+      '@forge/doc-ingest':
+        specifier: workspace:*
+        version: link:../doc_ingest
       '@forge/shared':
         specifier: workspace:*
         version: link:../../shared

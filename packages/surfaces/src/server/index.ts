@@ -11,6 +11,7 @@ import { forkCurrentTask } from "../adapters/swarm";
 import { startTelemetryWatcher } from "../adapters/telemetry";
 import type { OrchestrationMode, Task, TaskOrigin, TaskUpdatedEvent } from "../shared/task";
 import { TaskEventBus } from "./eventBus";
+import { extractRouter } from "./extract";
 
 const app = express();
 const server = createServer(app);
@@ -51,13 +52,16 @@ app.use((request, response, next) => {
     response.header("Vary", "Origin");
   }
   response.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  response.header("Access-Control-Allow-Headers", "Content-Type");
+  response.header("Access-Control-Allow-Headers", "Content-Type, X-File-Name");
   if (request.method === "OPTIONS") {
     response.sendStatus(204);
     return;
   }
   next();
 });
+
+// Raw-body upload routes go before the JSON parser.
+app.use(extractRouter);
 
 app.use(
   express.json({
